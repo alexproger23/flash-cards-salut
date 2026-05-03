@@ -59,4 +59,9 @@ if (patchedCount === 0) {
   throw new Error("No Salute client files were patched");
 }
 
+const viteCacheDir = path.join(__dirname, "..", "node_modules", ".vite");
+if (fs.existsSync(viteCacheDir)) {
+  fs.rmSync(viteCacheDir, { recursive: true, force: true });
+}
+
 console.log(`Patched @salutejs/client in ${patchedCount} file(s).`);

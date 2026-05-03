@@ -1,4 +1,5 @@
 import { createAssistant, createSmartappDebugger } from "@salutejs/client";
+import { renderCompactNativePanel } from "./compactNativePanel";
 
 export type VoiceAction = {
   type: string;
@@ -78,8 +79,26 @@ const normalizeAssistantAction = (action: unknown): VoiceAction | null => {
   return null;
 };
 
+const ignoredAssistantDataTypes = new Set([
+  "app_context",
+  "asr",
+  "character",
+  "feature_launcher",
+  "insets",
+  "listen",
+  "minimum_static_insets",
+  "maximum_static_insets",
+  "dynamic_insets",
+  "tts",
+  "tts_state_update",
+]);
+
 export const extractAssistantAction = (event: unknown): VoiceAction | null => {
   if (!isRecord(event)) {
+    return null;
+  }
+
+  if (typeof event.type === "string" && ignoredAssistantDataTypes.has(event.type)) {
     return null;
   }
 
@@ -107,7 +126,7 @@ export const extractAssistantAction = (event: unknown): VoiceAction | null => {
     return normalizeAssistantAction(event.smart_app_data);
   }
 
-  return normalizeAssistantAction(event);
+  return null;
 };
 
 const safeJsonStringify = (value: unknown): string => {
@@ -176,6 +195,7 @@ export const createVoiceAssistant = ({
         getState,
         getRecoveryState,
         nativePanel: {
+          render: renderCompactNativePanel,
           defaultText: "Скажи команду или введи ее текстом",
           screenshotMode: false,
           tabIndex: -1,
@@ -200,7 +220,7 @@ export const createVoiceAssistant = ({
       return;
     }
 
-    if (event.type === "character" || event.type === "insets") {
+    if (typeof event.type === "string" && ignoredAssistantDataTypes.has(event.type)) {
       return;
     }
 

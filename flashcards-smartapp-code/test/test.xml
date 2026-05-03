@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<test>
+    <test-case>
+        <q>покажи темы</q>
+    </test-case>
+    <test-case>
+        <q>начни тему номер 1</q>
+    </test-case>
+    <test-case>
+        <q>покажи ответ</q>
+    </test-case>
+    <test-case>
+        <q>я знаю</q>
+    </test-case>
+</test>

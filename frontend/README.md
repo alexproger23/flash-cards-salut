@@ -36,6 +36,23 @@ npm run dev -- --force
 npm run build
 ```
 
+
+## База данных и Auth (Supabase)
+
+Проект использует **Supabase** в качестве бэкенда (PostgreSQL + GoTrue Auth). Все темы и карточки синхронизируются с облаком в реальном времени.
+
+### Настройка Supabase
+
+1. Создайте проект на [supabase.com](https://supabase.com/).
+2. В панели управления проектом перейдите в **Project Settings -> API**.
+3. Скопируйте **Project URL** и **API Key** (anon public).
+4. Добавьте их в ваш файл `frontend/.env`:
+
+```dotenv
+VITE_SUPABASE_URL='ваш_project_url'
+VITE_SUPABASE_ANON_KEY='ваш_anon_public_key'
+```
+
 ## Основная структура
 
 ```text
@@ -52,6 +69,14 @@ src/app/data/customTopics.ts        # Свои темы в localStorage
 src/app/voice/                      # Интеграция Salute
 docs/salute-voice.md                # Формат команд SmartApp Code
 ```
+
+Структура БД (Таблицы)
+
+Для корректной работы приложения в Supabase должны быть созданы следующие таблицы:
+    profiles (id, email, avatar_url) — расширение данных пользователей.
+    topics (id, user_id, title, description, emoji, is_public) — темы.
+    cards (id, topic_id, front, back, created_at) — карточки внутри тем.
+
 
 Свои темы и результаты хранятся в `localStorage` браузера:
 
@@ -99,6 +124,7 @@ VITE_SALUTE_SMARTAPP=имя_CanvasApp
 REACT_APP_TOKEN=...
 REACT_APP_SMARTAPP=...
 ```
+
 
 После изменения `.env` нужно перезапустить dev-сервер.
 
@@ -238,3 +264,4 @@ npm run dev -- --force
 
 Изначальный UI был сгенерирован из Figma Make проекта `Minimalistic Flashcard Website`.
 Интеграция Salute перенесена из соседнего примера `salut-smart-app` и адаптирована под сценарий флеш-карт.
+

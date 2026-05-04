@@ -44,7 +44,7 @@ export function createCustomTopic(data: {
     id: `custom_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     title: data.title.trim(),
     description: data.description.trim(),
-    emoji: data.emoji || "📝",
+    emoji: data.emoji || "BookText", // Было: "📝"
     frontLabel: "Question",
     backLabel: "Answer",
     cards: [],

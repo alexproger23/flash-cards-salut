@@ -1,5 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router";
+import { 
+  ChevronLeft, Save, Plus, Sparkles, 
+  BookText, Microscope, Landmark, Calculator, Globe, Lightbulb, 
+  Music, Palette, TestTube, Leaf, Trophy, Brain, SpellCheck, 
+  Target, Dna, Ruler, Languages, Theater, Ghost, Rocket
+} from "lucide-react";
+import { toast } from "sonner";
 import {
   createCustomTopic,
   updateCustomTopic,
@@ -12,11 +19,30 @@ import {
   getTopicDescriptionFromAction,
   getTopicTitleFromAction,
 } from "../voice/flashcardVoice";
+import { TopicIcon } from "./components/TopicIcon";
 
-const EMOJI_OPTIONS = [
-  "📝", "📚", "🔬", "🏛️", "🧮", "🌍", "💡", "🎵",
-  "🎨", "⚗️", "🌱", "🏆", "🧠", "🔤", "🎯", "🧬",
-  "📐", "🌐", "🎭", "🏺",
+// Список современных иконок
+const ICON_OPTIONS = [
+  { id: "BookText", Icon: BookText },
+  { id: "Brain", Icon: Brain },
+  { id: "Languages", Icon: Languages },
+  { id: "Rocket", Icon: Rocket },
+  { id: "Target", Icon: Target },
+  { id: "Microscope", Icon: Microscope },
+  { id: "Lightbulb", Icon: Lightbulb },
+  { id: "Calculator", Icon: Calculator },
+  { id: "Globe", Icon: Globe },
+  { id: "Palette", Icon: Palette },
+  { id: "Music", Icon: Music },
+  { id: "Trophy", Icon: Trophy },
+  { id: "Leaf", Icon: Leaf },
+  { id: "TestTube", Icon: TestTube },
+  { id: "Dna", Icon: Dna },
+  { id: "Landmark", Icon: Landmark },
+  { id: "Ruler", Icon: Ruler },
+  { id: "Theater", Icon: Theater },
+  { id: "SpellCheck", Icon: SpellCheck },
+  { id: "Ghost", Icon: Ghost },
 ];
 
 interface InputProps {
@@ -30,8 +56,8 @@ interface InputProps {
 
 function Field({ label, value, onChange, placeholder, maxLength, autoFocus }: InputProps) {
   return (
-    <div className="flex flex-col gap-2">
-      <label className="text-xs font-medium text-muted-foreground uppercase tracking-widest">
+    <div className="flex flex-col gap-2.5">
+      <label className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] ml-1 opacity-70">
         {label}
       </label>
       <input
@@ -40,7 +66,7 @@ function Field({ label, value, onChange, placeholder, maxLength, autoFocus }: In
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         maxLength={maxLength}
-        className="w-full rounded-xl px-4 py-3 outline-none transition-all duration-150 bg-muted text-foreground border-2 border-transparent focus:border-primary text-sm"
+        className="w-full rounded-[1.25rem] px-6 py-4.5 outline-none transition-all duration-200 bg-input-background border border-border focus:border-primary focus:ring-4 focus:ring-primary/10 text-foreground placeholder:text-muted-foreground/30 font-medium"
       />
     </div>
   );
@@ -54,7 +80,7 @@ export function CreateEditTopic() {
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [emoji, setEmoji] = useState("📝");
+  const [iconId, setIconId] = useState("BookText");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -63,7 +89,7 @@ export function CreateEditTopic() {
       if (topic) {
         setTitle(topic.title);
         setDescription(topic.description);
-        setEmoji(topic.emoji);
+        setIconId(topic.emoji || "BookText");
       } else {
         navigate("/");
       }
@@ -75,131 +101,160 @@ export function CreateEditTopic() {
       screen: "topic_form",
       editing: isEditing,
       topicId,
-      draft: { title, description, emoji },
+      draft: { title, description, emoji: iconId },
     });
-  }, [description, emoji, isEditing, setAssistantState, title, topicId]);
+  }, [description, iconId, isEditing, setAssistantState, title, topicId]);
 
-  const saveTopic = (nextTitle = title, nextDescription = description, nextEmoji = emoji) => {
+  const saveTopic = (nextTitle = title, nextDescription = description, nextIcon = iconId) => {
     if (!nextTitle.trim()) {
-      setError("Please add a title for your topic.");
+      setError("Пожалуйста, введите название темы.");
       speak("Нужно название темы.", "topic_title_missing");
       return;
     }
-    if (isEditing && topicId) {
-      updateCustomTopic(topicId, { title: nextTitle, description: nextDescription, emoji: nextEmoji });
-      navigate(`/topics/${topicId}`);
-    } else {
-      const created = createCustomTopic({
-        title: nextTitle,
-        description: nextDescription,
-        emoji: nextEmoji,
-      });
-      navigate(`/topics/${created.id}`);
+
+    try {
+      if (isEditing && topicId) {
+        updateCustomTopic(topicId, { 
+          title: nextTitle, 
+          description: nextDescription, 
+          emoji: nextIcon 
+        });
+        toast.success("Изменения сохранены");
+        navigate(`/topics/${topicId}`);
+      } else {
+        const created = createCustomTopic({
+          title: nextTitle,
+          description: nextDescription,
+          emoji: nextIcon,
+        });
+        toast.success("Тема создана!");
+        navigate(`/topics/${created.id}`);
+      }
+    } catch (e) {
+      toast.error("Ошибка при сохранении");
     }
   };
 
   const handleSave = () => saveTopic();
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") handleSave();
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSave();
   };
 
   useVoiceActionHandler(
     (action) => {
       if (actionMatches(action, ["set_topic_title", "set_title"])) {
         const nextTitle = getTopicTitleFromAction(action);
-        if (nextTitle) {
-          setTitle(nextTitle);
-          setError("");
-        }
+        if (nextTitle) { setTitle(nextTitle); setError(""); }
         return true;
       }
       if (actionMatches(action, ["set_topic_description", "set_description"])) {
         setDescription(getTopicDescriptionFromAction(action) || getActionString(action, ["value"]));
         return true;
       }
-      if (actionMatches(action, ["set_topic_emoji", "set_emoji"])) {
-        const nextEmoji = getActionString(action, ["emoji", "icon", "value"]);
-        if (nextEmoji) setEmoji(nextEmoji);
-        return true;
-      }
       if (actionMatches(action, ["create_topic", "save_topic"])) {
         const nextTitle = getTopicTitleFromAction(action) || title;
         const nextDescription = getTopicDescriptionFromAction(action) || description;
-        const nextEmoji = getActionString(action, ["emoji", "icon"]) || emoji;
-        saveTopic(nextTitle, nextDescription, nextEmoji);
+        saveTopic(nextTitle, nextDescription, iconId);
         return true;
       }
       return false;
     },
-    [description, emoji, isEditing, navigate, speak, title, topicId],
+    [description, iconId, isEditing, navigate, speak, title, topicId],
     20
   );
 
   return (
-    <div className="min-h-screen flex flex-col items-center px-4 py-12 bg-background">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen pt-8 pb-24 px-4 animate-in fade-in duration-500">
+      <div className="max-w-xl mx-auto">
         <button
           onClick={() => navigate(isEditing && topicId ? `/topics/${topicId}` : "/")}
-          className="text-sm transition-opacity hover:opacity-60 mb-10 flex items-center gap-1 text-muted-foreground hover:text-foreground"
+          className="group flex items-center gap-3 text-sm font-bold text-muted-foreground hover:text-primary transition-all mb-8"
         >
-          ← Back
-        </button>
-
-        <h1 className="text-2xl font-semibold text-foreground mb-1">
-          {isEditing ? "Edit topic" : "New topic"}
-        </h1>
-        <p className="text-muted-foreground text-sm mb-10">
-          {isEditing ? "Update the details of your study set." : "Give your study set a clear name."}
-        </p>
-
-        <div className="mb-6">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-3">
-            Icon
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {EMOJI_OPTIONS.map((e) => (
-              <button
-                key={e}
-                onClick={() => setEmoji(e)}
-                className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl transition-all duration-150 border-2 ${
-                  emoji === e
-                    ? "bg-primary border-primary scale-110"
-                    : "bg-muted border-transparent hover:bg-accent"
-                }`}
-              >
-                {e}
-              </button>
-            ))}
+          <div className="w-10 h-10 rounded-full bg-card border border-border flex items-center justify-center group-hover:bg-primary/10 group-hover:border-primary/20 transition-all shadow-sm">
+            <ChevronLeft size={20} />
           </div>
-        </div>
-
-        <div className="flex flex-col gap-4" onKeyDown={handleKeyDown}>
-          <Field
-            label="Title"
-            value={title}
-            onChange={(v) => { setTitle(v); setError(""); }}
-            placeholder="e.g. English Irregular Verbs"
-            maxLength={60}
-            autoFocus
-          />
-          <Field
-            label="Description (optional)"
-            value={description}
-            onChange={setDescription}
-            placeholder="e.g. Verbs for my English exam on Friday"
-            maxLength={120}
-          />
-        </div>
-
-        {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
-
-        <button
-          onClick={handleSave}
-          className="w-full mt-8 rounded-2xl py-4 text-sm font-medium transition-all duration-150 active:scale-95 bg-primary text-primary-foreground shadow-md hover:bg-primary/90"
-        >
-          {isEditing ? "Save changes" : "Create topic"}
+          Назад
         </button>
+
+        <div className="bg-card border border-border rounded-[3rem] p-8 md:p-12 shadow-2xl shadow-black/5 relative overflow-hidden">
+          {/* Декоративный элемент фона */}
+          <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 blur-3xl rounded-full -mr-16 -mt-16" />
+
+          <header className="mb-12 relative z-10">
+            <div className="flex items-center gap-4 mb-4">
+               <div className="w-14 h-14 bg-primary/10 text-primary rounded-[1.25rem] flex items-center justify-center shadow-inner">
+                  <TopicIcon name={iconId} size={28} />
+               </div>
+               <div>
+                  <h1 className="text-3xl font-black tracking-tight text-foreground leading-tight">
+                    {isEditing ? "Настройки темы" : "Новый набор"}
+                  </h1>
+                  <p className="text-muted-foreground text-sm font-medium opacity-80">
+                    {isEditing ? "Обновите оформление и описание" : "Создайте структуру для обучения"}
+                  </p>
+               </div>
+            </div>
+          </header>
+
+          {/* ВЫБОР ИКОНКИ */}
+          <section className="mb-10 relative z-10">
+            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.25em] mb-5 ml-1 opacity-70">
+              Визуальный стиль
+            </p>
+            <div className="grid grid-cols-5 sm:grid-cols-7 gap-3">
+              {ICON_OPTIONS.map(({ id, Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setIconId(id)}
+                  className={`aspect-square rounded-2xl flex items-center justify-center transition-all duration-300 border-2 ${
+                    iconId === id
+                      ? "bg-primary text-primary-foreground border-primary shadow-xl shadow-primary/25 scale-110 z-10"
+                      : "bg-input-background border-transparent hover:border-border hover:bg-muted/50 text-muted-foreground/40"
+                  }`}
+                >
+                  <Icon size={22} strokeWidth={iconId === id ? 3 : 2} />
+                </button>
+              ))}
+            </div>
+          </section>
+
+          {/* ПОЛЯ ВВОДА */}
+          <div className="flex flex-col gap-8 relative z-10" onKeyDown={handleKeyDown}>
+            <Field
+              label="Название курса"
+              value={title}
+              onChange={(v) => { setTitle(v); setError(""); }}
+              placeholder="Напр: Иррегулярные глаголы"
+              maxLength={60}
+              autoFocus
+            />
+            <Field
+              label="Краткое описание"
+              value={description}
+              onChange={setDescription}
+              placeholder="О чем этот набор карточек?"
+              maxLength={120}
+            />
+          </div>
+
+          {error && (
+            <div className="mt-6 p-4 rounded-2xl bg-destructive/10 text-destructive text-xs font-black uppercase tracking-wider flex items-center gap-2 animate-in slide-in-from-top-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-destructive animate-pulse" />
+              {error}
+            </div>
+          )}
+
+          {/* КНОПКА СОХРАНЕНИЯ */}
+          <button
+            onClick={handleSave}
+            className="w-full mt-12 bg-primary text-primary-foreground py-5 rounded-[1.5rem] font-black uppercase tracking-widest text-sm flex items-center justify-center gap-3 shadow-2xl shadow-primary/30 hover:brightness-110 active:scale-[0.97] transition-all relative z-10"
+          >
+            {isEditing ? <Save size={20} strokeWidth={3} /> : <Plus size={20} strokeWidth={3} />}
+            {isEditing ? "Сохранить изменения" : "Создать колоду"}
+          </button>
+        </div>
       </div>
     </div>
   );

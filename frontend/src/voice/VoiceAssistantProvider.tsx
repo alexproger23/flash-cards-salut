@@ -65,7 +65,6 @@ const getTopicPath = (topic: VoiceTopic, mode: "open" | "study"): string => {
   if (mode === "study") {
     return `/study/${topic.id}`;
   }
-
   return isCustomVoiceTopic(topic) ? `/topics/${topic.id}` : `/study/${topic.id}`;
 };
 
@@ -100,36 +99,18 @@ export function VoiceAssistantProvider({
   const sendAssistantAction = useCallback(
     (actionId: string, parameters: Record<string, unknown> = {}) => {
       const assistant = assistantRef.current;
-      if (!assistant) {
-        return;
-      }
-
-      assistant.sendData(
-        {
-          action: {
-            action_id: actionId,
-            parameters,
-          },
-        },
-        (response) => {
-          console.log("assistant.sendData response", response);
-        }
-      );
+      if (!assistant) return;
+      assistant.sendData({
+        action: { action_id: actionId, parameters },
+      });
     },
     []
   );
 
   const speak = useCallback(
     (text: string, reason = "feedback") => {
-      if (!text.trim()) {
-        return;
-      }
-
-      sendAssistantAction("voice_feedback", {
-        value: text,
-        text,
-        reason,
-      });
+      if (!text.trim()) return;
+      sendAssistantAction("voice_feedback", { value: text, text, reason });
     },
     [sendAssistantAction]
   );
@@ -140,24 +121,20 @@ export function VoiceAssistantProvider({
         navigate("/");
         return true;
       }
-
       if (actionMatches(action, ["back", "go_back"])) {
         navigate(-1);
         return true;
       }
-
       if (actionMatches(action, ["new_topic", "open_new_topic_form"])) {
         navigate("/topics/new");
         return true;
       }
-
       if (actionMatches(action, ["create_topic"])) {
         const title = getTopicTitleFromAction(action);
         if (!title) {
           navigate("/topics/new");
           return true;
         }
-
         const created = createCustomTopic({
           title,
           description: getTopicDescriptionFromAction(action),
@@ -167,37 +144,31 @@ export function VoiceAssistantProvider({
         speak(`Тема ${created.title} создана. Можно добавлять карточки.`, "topic_created");
         return true;
       }
-
       if (actionMatches(action, ["open_topic", "start_topic", "start_study", "practice_topic"])) {
         const topic = findTopicFromAction(action);
         if (!topic) {
           speak("Не нашла такую тему.", "topic_not_found");
           return true;
         }
-
         const mode = actionMatches(action, ["start_topic", "start_study", "practice_topic"])
           ? "study"
           : "open";
         navigate(getTopicPath(topic, mode));
         return true;
       }
-
       if (actionMatches(action, ["add_card", "create_card"])) {
         const topic = findTopicFromAction(action);
         const front = getCardFrontFromAction(action);
         const back = getCardBackFromAction(action);
-
         if (!topic || !isCustomVoiceTopic(topic)) {
           speak("Карточки можно добавлять только в свою тему.", "card_topic_missing");
           return true;
         }
-
         if (!front || !back) {
           navigate(`/topics/${topic.id}`);
           speak("Открой тему и продиктуй вопрос и ответ для новой карточки.", "card_data_missing");
           return true;
         }
-
         const updated = addCard(topic.id, front, back);
         if (updated) {
           navigate(`/topics/${updated.id}`);
@@ -205,7 +176,6 @@ export function VoiceAssistantProvider({
         }
         return true;
       }
-
       return false;
     },
     [navigate, speak]
@@ -215,20 +185,11 @@ export function VoiceAssistantProvider({
     (action: VoiceAction) => {
       setLastAction(action);
       setError("");
-
       const handlers = [...handlersRef.current].sort((a, b) => b.priority - a.priority || b.id - a.id);
-
       for (const { handler } of handlers) {
-        if (handler(action)) {
-          return;
-        }
+        if (handler(action)) return;
       }
-
-      if (handleGlobalAction(action)) {
-        return;
-      }
-
-      console.warn("Unsupported assistant action received", action);
+      if (handleGlobalAction(action)) return;
       speak("Команда пока не поддерживается.", "unsupported_action");
     },
     [handleGlobalAction, speak]
@@ -242,7 +203,6 @@ export function VoiceAssistantProvider({
     const id = nextHandlerIdRef.current;
     nextHandlerIdRef.current += 1;
     handlersRef.current = [...handlersRef.current, { id, priority, handler }];
-
     return () => {
       handlersRef.current = handlersRef.current.filter((entry) => entry.id !== id);
     };
@@ -258,7 +218,6 @@ export function VoiceAssistantProvider({
       onAction: (action) => dispatchAction(action),
       onError: (event) => {
         const message = formatAssistantError(event);
-        console.error("Salute assistant error:", message, event);
         setError(message);
       },
       onStart: (_event, initialData) => {
@@ -288,32 +247,23 @@ export function VoiceAssistantProvider({
       speak,
       clearError: () => setError(""),
     }),
-    [
-      disabledReason,
-      error,
-      lastAction,
-      mode,
-      registerHandler,
-      sendAssistantAction,
-      setAssistantState,
-      speak,
-    ]
+    [disabledReason, error, lastAction, mode, registerHandler, sendAssistantAction, setAssistantState, speak]
   );
 
   return (
     <VoiceAssistantContext.Provider value={contextValue}>
       {children}
+      {/* Исправленное уведомление об ошибке: теперь оно темное в темной теме */}
       {error ? (
         <div
           role="alert"
-          className="fixed left-4 right-4 top-4 z-50 mx-auto max-w-lg rounded-xl px-4 py-3 text-sm shadow-lg"
-          style={{
-            backgroundColor: "#fff5f5",
-            border: "1px solid rgba(224,82,82,0.2)",
-            color: "#7a4040",
-          }}
+          className="fixed left-4 right-4 top-4 z-[200] mx-auto max-w-lg rounded-2xl px-5 py-4 text-sm shadow-2xl border animate-in slide-in-from-top-4 bg-card text-foreground border-destructive/20"
         >
-          Ошибка Salute: {error}
+          <div className="flex items-center gap-3">
+            <div className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
+            <span className="font-bold">Ошибка Salute:</span>
+            <span className="opacity-90">{error}</span>
+          </div>
         </div>
       ) : null}
     </VoiceAssistantContext.Provider>
@@ -322,9 +272,7 @@ export function VoiceAssistantProvider({
 
 export const useVoiceAssistant = (): VoiceAssistantContextValue => {
   const context = useContext(VoiceAssistantContext);
-  if (!context) {
-    throw new Error("useVoiceAssistant must be used inside VoiceAssistantProvider");
-  }
+  if (!context) throw new Error("useVoiceAssistant must be used inside VoiceAssistantProvider");
   return context;
 };
 
@@ -334,6 +282,5 @@ export const useVoiceActionHandler = (
   priority = 0
 ) => {
   const { registerHandler } = useVoiceAssistant();
-
   useEffect(() => registerHandler(handler, priority), [registerHandler, priority, ...deps]);
 };

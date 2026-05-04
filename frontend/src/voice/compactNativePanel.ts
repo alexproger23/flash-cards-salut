@@ -22,6 +22,7 @@ let unsubscribeHypotesis: (() => void) | void;
 let listenStatus = "idle";
 let hypothesis = "";
 
+// ИСПОЛЬЗУЕМ ПЕРЕМЕННЫЕ ТЕМЫ
 const panelStyles = `
   .FlashcardsSalutePanel {
     position: fixed;
@@ -29,19 +30,21 @@ const panelStyles = `
     right: 16px;
     z-index: 1000;
     width: min(340px, calc(100vw - 32px));
-    color: #1a1a2e;
-    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: var(--foreground);
+    font-family: Inter, system-ui, sans-serif;
+    transition: all 0.3s ease;
   }
 
   .FlashcardsSalutePanel__shell {
     display: grid;
     gap: 8px;
     padding: 10px;
-    border: 1px solid rgba(26, 26, 46, 0.08);
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.92);
-    box-shadow: 0 8px 28px rgba(26, 26, 46, 0.12), 0 1px 3px rgba(26, 26, 46, 0.08);
-    backdrop-filter: blur(14px);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    background: var(--card);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    backdrop-filter: blur(12px);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
   }
 
   .FlashcardsSalutePanel__row {
@@ -58,42 +61,46 @@ const panelStyles = `
     align-items: center;
     justify-content: center;
     border: 0;
-    border-radius: 999px;
+    border-radius: 12px;
     color: #fff;
-    background: #1a1a2e;
+    background: var(--primary);
     cursor: pointer;
-    transition: transform 120ms ease, background-color 120ms ease;
+    transition: all 150ms ease;
   }
 
   .FlashcardsSalutePanel__mic:hover {
-    background: #2a2a3e;
-  }
-
-  .FlashcardsSalutePanel__mic:active {
-    transform: scale(0.96);
+    filter: brightness(1.1);
   }
 
   .FlashcardsSalutePanel__mic[data-active="true"] {
-    background: #24b23e;
+    background: #ef4444; /* Цвет записи */
+    animation: pulse-red 1.5s infinite;
+  }
+
+  @keyframes pulse-red {
+    0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
   }
 
   .FlashcardsSalutePanel__input {
     width: 100%;
     height: 38px;
     box-sizing: border-box;
-    border: 1px solid rgba(26, 26, 46, 0.1);
-    border-radius: 10px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
     outline: 0;
     padding: 0 12px;
-    color: #1a1a2e;
-    background: #f7f7fa;
+    color: var(--foreground);
+    background: var(--muted);
     font: inherit;
     font-size: 13px;
+    transition: all 0.2s ease;
   }
 
   .FlashcardsSalutePanel__input:focus {
-    border-color: #1a1a2e;
-    background: #fff;
+    border-color: var(--primary);
+    background: var(--card);
   }
 
   .FlashcardsSalutePanel__status {
@@ -101,8 +108,10 @@ const panelStyles = `
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
-    color: #707090;
+    color: var(--foreground);
+    opacity: 0.6;
     font-size: 11px;
+    padding-left: 4px;
   }
 
   .FlashcardsSalutePanel__suggests {
@@ -110,34 +119,33 @@ const panelStyles = `
     gap: 6px;
     overflow-x: auto;
     scrollbar-width: none;
+    padding-top: 4px;
   }
 
-  .FlashcardsSalutePanel__suggests::-webkit-scrollbar {
-    display: none;
-  }
+  .FlashcardsSalutePanel__suggests::-webkit-scrollbar { display: none; }
 
   .FlashcardsSalutePanel__suggest {
     flex: 0 0 auto;
-    border: 0;
+    border: 1px solid var(--border);
     border-radius: 999px;
-    padding: 6px 10px;
-    color: #5a5a7a;
-    background: #f0f0f6;
+    padding: 6px 12px;
+    color: var(--foreground);
+    background: var(--muted);
     cursor: pointer;
     font: inherit;
     font-size: 12px;
+    transition: all 0.2s ease;
   }
 
   .FlashcardsSalutePanel__suggest:hover {
-    background: #e7e7f0;
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
   }
 `;
 
 const ensureRoot = (): HTMLDivElement => {
-  if (root) {
-    return root;
-  }
-
+  if (root) return root;
   root = document.createElement("div");
   root.id = "FlashcardsSalutePanel";
   root.className = "FlashcardsSalutePanel";
@@ -153,22 +161,9 @@ const escapeHtml = (value: string): string =>
     .replace(/"/g, "&quot;");
 
 const getStatusText = (bubbleText?: string): string => {
-  if (hypothesis) {
-    return hypothesis;
-  }
-
-  if (bubbleText) {
-    return bubbleText;
-  }
-
-  if (listenStatus === "listen") {
-    return "Слушаю...";
-  }
-
-  if (listenStatus === "stopped") {
-    return "Готова к команде";
-  }
-
+  if (hypothesis) return hypothesis;
+  if (bubbleText) return bubbleText;
+  if (listenStatus === "listen") return "Слушаю...";
   return "Готова к команде";
 };
 
@@ -187,13 +182,11 @@ const render = (props: CompactNativePanelProps) => {
         <button
           class="FlashcardsSalutePanel__mic"
           type="button"
-          title="Сказать команду"
-          aria-label="Сказать команду"
           data-active="${active ? "true" : "false"}"
         >
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            <path d="M19 11a7 7 0 0 1-14 0M12 18v4M8 22h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Z" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+            <path d="M19 11a7 7 0 0 1-14 0M12 18v4M8 22h8" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
           </svg>
         </button>
         <input
@@ -222,20 +215,12 @@ const render = (props: CompactNativePanelProps) => {
     container.querySelectorAll<HTMLButtonElement>(".FlashcardsSalutePanel__suggest")
   );
 
-  mic?.addEventListener("click", () => {
-    props.onListen?.();
-  });
+  mic?.addEventListener("click", () => props.onListen?.());
 
   input?.addEventListener("keydown", (event) => {
-    if (event.key !== "Enter") {
-      return;
-    }
-
+    if (event.key !== "Enter") return;
     const text = input.value.trim();
-    if (!text) {
-      return;
-    }
-
+    if (!text) return;
     props.sendText?.(text);
     input.value = "";
   });
@@ -243,9 +228,7 @@ const render = (props: CompactNativePanelProps) => {
   suggestButtons.forEach((button) => {
     button.addEventListener("click", () => {
       const text = button.textContent?.trim();
-      if (text) {
-        props.sendText?.(text);
-      }
+      if (text) props.sendText?.(text);
     });
   });
 };

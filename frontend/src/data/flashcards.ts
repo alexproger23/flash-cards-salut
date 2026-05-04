@@ -8,7 +8,7 @@ export interface Topic {
   id: string;
   title: string;
   description: string;
-  emoji: string;
+  emoji: string; // Теперь здесь будет название иконки Lucide
   frontLabel: string;
   backLabel: string;
   color: string;
@@ -20,7 +20,7 @@ export const topics: Topic[] = [
     id: "english-vocabulary",
     title: "English Vocabulary",
     description: "Learn common English words and their meanings",
-    emoji: "📖",
+    emoji: "Languages", // Было: 📖
     frontLabel: "Word",
     backLabel: "Definition",
     color: "#f0f4ff",
@@ -43,7 +43,7 @@ export const topics: Topic[] = [
     id: "history-dates",
     title: "History Dates",
     description: "Key moments that shaped world history",
-    emoji: "🏛️",
+    emoji: "History", // Было: 🏛️
     frontLabel: "Date",
     backLabel: "Event",
     color: "#fff8f0",
@@ -66,7 +66,7 @@ export const topics: Topic[] = [
     id: "biology-terms",
     title: "Biology Terms",
     description: "Essential concepts from the science of life",
-    emoji: "🔬",
+    emoji: "Microscope", // Было: 🔬
     frontLabel: "Term",
     backLabel: "Definition",
     color: "#f0fff4",

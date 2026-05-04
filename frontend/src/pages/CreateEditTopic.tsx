@@ -31,7 +31,7 @@ interface InputProps {
 function Field({ label, value, onChange, placeholder, maxLength, autoFocus }: InputProps) {
   return (
     <div className="flex flex-col gap-2">
-      <label style={{ fontSize: "0.78rem", color: "#9898b0", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+      <label className="text-xs font-medium text-muted-foreground uppercase tracking-widest">
         {label}
       </label>
       <input
@@ -40,15 +40,7 @@ function Field({ label, value, onChange, placeholder, maxLength, autoFocus }: In
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         maxLength={maxLength}
-        className="w-full rounded-xl px-4 py-3 outline-none transition-all duration-150"
-        style={{
-          backgroundColor: "#f5f5f8",
-          border: "1.5px solid transparent",
-          color: "#1a1a2e",
-          fontSize: "0.95rem",
-        }}
-        onFocus={(e) => (e.target.style.borderColor = "#1a1a2e")}
-        onBlur={(e) => (e.target.style.borderColor = "transparent")}
+        className="w-full rounded-xl px-4 py-3 outline-none transition-all duration-150 bg-muted text-foreground border-2 border-transparent focus:border-primary text-sm"
       />
     </div>
   );
@@ -106,9 +98,7 @@ export function CreateEditTopic() {
     }
   };
 
-  const handleSave = () => {
-    saveTopic();
-  };
+  const handleSave = () => saveTopic();
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleSave();
@@ -124,20 +114,15 @@ export function CreateEditTopic() {
         }
         return true;
       }
-
       if (actionMatches(action, ["set_topic_description", "set_description"])) {
         setDescription(getTopicDescriptionFromAction(action) || getActionString(action, ["value"]));
         return true;
       }
-
       if (actionMatches(action, ["set_topic_emoji", "set_emoji"])) {
         const nextEmoji = getActionString(action, ["emoji", "icon", "value"]);
-        if (nextEmoji) {
-          setEmoji(nextEmoji);
-        }
+        if (nextEmoji) setEmoji(nextEmoji);
         return true;
       }
-
       if (actionMatches(action, ["create_topic", "save_topic"])) {
         const nextTitle = getTopicTitleFromAction(action) || title;
         const nextDescription = getTopicDescriptionFromAction(action) || description;
@@ -145,7 +130,6 @@ export function CreateEditTopic() {
         saveTopic(nextTitle, nextDescription, nextEmoji);
         return true;
       }
-
       return false;
     },
     [description, emoji, isEditing, navigate, speak, title, topicId],
@@ -153,31 +137,24 @@ export function CreateEditTopic() {
   );
 
   return (
-    <div
-      className="min-h-screen flex flex-col items-center px-4 py-12"
-      style={{ backgroundColor: "#fafafa" }}
-    >
+    <div className="min-h-screen flex flex-col items-center px-4 py-12 bg-background">
       <div className="w-full max-w-md">
-        {/* Back */}
         <button
           onClick={() => navigate(isEditing && topicId ? `/topics/${topicId}` : "/")}
-          className="text-sm transition-opacity hover:opacity-60 mb-10 flex items-center gap-1"
-          style={{ color: "#9898b0" }}
+          className="text-sm transition-opacity hover:opacity-60 mb-10 flex items-center gap-1 text-muted-foreground hover:text-foreground"
         >
           ← Back
         </button>
 
-        {/* Heading */}
-        <h1 style={{ color: "#1a1a2e", marginBottom: "0.25rem" }}>
+        <h1 className="text-2xl font-semibold text-foreground mb-1">
           {isEditing ? "Edit topic" : "New topic"}
         </h1>
-        <p style={{ color: "#9898b0", fontSize: "0.9rem", marginBottom: "2.5rem" }}>
+        <p className="text-muted-foreground text-sm mb-10">
           {isEditing ? "Update the details of your study set." : "Give your study set a clear name."}
         </p>
 
-        {/* Emoji Picker */}
         <div className="mb-6">
-          <p style={{ fontSize: "0.78rem", color: "#9898b0", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "0.75rem" }}>
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-3">
             Icon
           </p>
           <div className="flex flex-wrap gap-2">
@@ -185,13 +162,11 @@ export function CreateEditTopic() {
               <button
                 key={e}
                 onClick={() => setEmoji(e)}
-                className="w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150"
-                style={{
-                  fontSize: "1.3rem",
-                  backgroundColor: emoji === e ? "#1a1a2e" : "#f0f0f5",
-                  border: emoji === e ? "2px solid #1a1a2e" : "2px solid transparent",
-                  transform: emoji === e ? "scale(1.1)" : "scale(1)",
-                }}
+                className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl transition-all duration-150 border-2 ${
+                  emoji === e
+                    ? "bg-primary border-primary scale-110"
+                    : "bg-muted border-transparent hover:bg-accent"
+                }`}
               >
                 {e}
               </button>
@@ -199,7 +174,6 @@ export function CreateEditTopic() {
           </div>
         </div>
 
-        {/* Fields */}
         <div className="flex flex-col gap-4" onKeyDown={handleKeyDown}>
           <Field
             label="Title"
@@ -218,22 +192,11 @@ export function CreateEditTopic() {
           />
         </div>
 
-        {/* Error */}
-        {error && (
-          <p className="mt-3 text-sm" style={{ color: "#e05252" }}>{error}</p>
-        )}
+        {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
 
-        {/* Save */}
         <button
           onClick={handleSave}
-          className="w-full mt-8 rounded-2xl py-4 text-sm transition-all duration-150 active:scale-95"
-          style={{
-            backgroundColor: "#1a1a2e",
-            color: "#ffffff",
-            boxShadow: "0 2px 12px rgba(26,26,46,0.15)",
-          }}
-          onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.backgroundColor = "#2a2a3e")}
-          onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.backgroundColor = "#1a1a2e")}
+          className="w-full mt-8 rounded-2xl py-4 text-sm font-medium transition-all duration-150 active:scale-95 bg-primary text-primary-foreground shadow-md hover:bg-primary/90"
         >
           {isEditing ? "Save changes" : "Create topic"}
         </button>

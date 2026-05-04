@@ -25,9 +25,7 @@ export function Results() {
   const isCustom = Boolean(custom);
 
   useEffect(() => {
-    if (!state || !topic) {
-      return;
-    }
+    if (!state || !topic) return;
 
     setAssistantState({
       screen: "results",
@@ -43,20 +41,15 @@ export function Results() {
 
   useVoiceActionHandler(
     (action) => {
-      if (!topic) {
-        return false;
-      }
-
+      if (!topic) return false;
       if (actionMatches(action, ["study_again", "restart_study", "start_study"])) {
         navigate(`/study/${topic.id}`);
         return true;
       }
-
       if (actionMatches(action, ["open_topic", "back_to_topic"]) && isCustom) {
         navigate(`/topics/${topic.id}`);
         return true;
       }
-
       return false;
     },
     [isCustom, navigate, topic],
@@ -82,33 +75,24 @@ export function Results() {
   const { text, emoji } = getMessage();
 
   return (
-    <div
-      className="min-h-screen flex flex-col items-center justify-center px-4"
-      style={{ backgroundColor: "#fafafa" }}
-    >
-      <div
-        className="w-full max-w-sm rounded-3xl p-10 flex flex-col items-center text-center"
-        style={{
-          backgroundColor: "#ffffff",
-          boxShadow: "0 4px 32px rgba(0,0,0,0.07), 0 1px 4px rgba(0,0,0,0.04)",
-        }}
-      >
-        <div style={{ fontSize: "3rem", marginBottom: "0.5rem" }}>{emoji}</div>
-        <h1 style={{ color: "#1a1a2e", marginBottom: "0.25rem" }}>{text}</h1>
-        <p style={{ color: "#9898b0", fontSize: "0.9rem", marginBottom: "2rem" }}>
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-background">
+      <div className="w-full max-w-sm rounded-3xl p-10 flex flex-col items-center text-center bg-card shadow-xl border border-border/50">
+        <div className="text-5xl mb-2">{emoji}</div>
+        <h1 className="text-2xl font-bold text-foreground mb-1">{text}</h1>
+        <p className="text-muted-foreground text-sm mb-8">
           {topic.emoji} {topic.title}
         </p>
 
         {/* Score Ring */}
-        <div className="relative flex items-center justify-center mb-8" style={{ width: 120, height: 120 }}>
-          <svg width="120" height="120" style={{ transform: "rotate(-90deg)" }}>
-            <circle cx="60" cy="60" r="50" fill="none" stroke="#ebebf0" strokeWidth="8" />
+        <div className="relative flex items-center justify-center mb-8 w-[120px] h-[120px]">
+          <svg className="w-[120px] h-[120px] -rotate-90">
+            <circle cx="60" cy="60" r="50" fill="none" className="stroke-muted" strokeWidth="8" />
             <circle
               cx="60"
               cy="60"
               r="50"
               fill="none"
-              stroke="#1a1a2e"
+              className="stroke-primary"
               strokeWidth="8"
               strokeLinecap="round"
               strokeDasharray={`${2 * Math.PI * 50}`}
@@ -117,7 +101,7 @@ export function Results() {
             />
           </svg>
           <div className="absolute flex flex-col items-center">
-            <span style={{ fontSize: "1.6rem", fontWeight: 600, color: "#1a1a2e" }}>
+            <span className="text-2xl font-bold text-foreground">
               {percentage}%
             </span>
           </div>
@@ -125,13 +109,13 @@ export function Results() {
 
         {/* Stats */}
         <div className="flex w-full gap-3 mb-8">
-          <div className="flex-1 rounded-2xl py-4" style={{ backgroundColor: "#f6f9f6" }}>
-            <div style={{ fontSize: "1.6rem", fontWeight: 600, color: "#1a1a2e" }}>{known}</div>
-            <div style={{ fontSize: "0.78rem", color: "#7a9a7a", marginTop: "0.1rem" }}>Knew it</div>
+          <div className="flex-1 rounded-2xl py-4 bg-green-50 dark:bg-green-950/30">
+            <div className="text-2xl font-bold text-green-600 dark:text-green-500">{known}</div>
+            <div className="text-xs font-medium text-green-600/70 dark:text-green-500/70 mt-1">Knew it</div>
           </div>
-          <div className="flex-1 rounded-2xl py-4" style={{ backgroundColor: "#fff5f5" }}>
-            <div style={{ fontSize: "1.6rem", fontWeight: 600, color: "#e05252" }}>{unknown}</div>
-            <div style={{ fontSize: "0.78rem", color: "#c08888", marginTop: "0.1rem" }}>Didn't know</div>
+          <div className="flex-1 rounded-2xl py-4 bg-red-50 dark:bg-red-950/30">
+            <div className="text-2xl font-bold text-destructive">{unknown}</div>
+            <div className="text-xs font-medium text-destructive/70 mt-1">Didn't know</div>
           </div>
         </div>
 
@@ -139,30 +123,21 @@ export function Results() {
         <div className="flex flex-col gap-3 w-full">
           <button
             onClick={() => navigate(`/study/${topic.id}`)}
-            className="w-full rounded-2xl py-4 text-sm transition-all duration-150 active:scale-95"
-            style={{ backgroundColor: "#1a1a2e", color: "#ffffff" }}
-            onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.backgroundColor = "#2a2a3e")}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.backgroundColor = "#1a1a2e")}
+            className="w-full rounded-2xl py-4 text-sm font-medium transition-all duration-150 active:scale-95 bg-primary text-primary-foreground hover:bg-primary/90"
           >
             Study again
           </button>
           {isCustom && (
             <button
               onClick={() => navigate(`/topics/${topic.id}`)}
-              className="w-full rounded-2xl py-4 text-sm transition-all duration-150 active:scale-95"
-              style={{ backgroundColor: "#f0f0f7", color: "#5a5a7a" }}
-              onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.backgroundColor = "#e8e8f0")}
-              onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.backgroundColor = "#f0f0f7")}
+              className="w-full rounded-2xl py-4 text-sm font-medium transition-all duration-150 active:scale-95 bg-secondary text-secondary-foreground hover:bg-secondary/80"
             >
               Back to topic
             </button>
           )}
           <button
             onClick={() => navigate("/")}
-            className="w-full rounded-2xl py-4 text-sm transition-all duration-150 active:scale-95"
-            style={{ backgroundColor: "#f5f5f8", color: "#5a5a7a" }}
-            onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.backgroundColor = "#ebebf0")}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.backgroundColor = "#f5f5f8")}
+            className="w-full rounded-2xl py-4 text-sm font-medium transition-all duration-150 active:scale-95 bg-muted text-muted-foreground hover:bg-muted/80"
           >
             All topics
           </button>

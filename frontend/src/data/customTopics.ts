@@ -18,6 +18,9 @@ export interface CustomTopic {
   isCustom: true;
 }
 
+/**
+ * ЗАГРУЗКА
+ */
 export function loadCustomTopics(): CustomTopic[] {
   try {
     return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
@@ -26,14 +29,23 @@ export function loadCustomTopics(): CustomTopic[] {
   }
 }
 
-function saveCustomTopics(topics: CustomTopic[]): void {
+/**
+ * СОХРАНЕНИЕ (Добавил export, чтобы не было ошибки SyntaxError)
+ */
+export function saveCustomTopics(topics: CustomTopic[]): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(topics));
 }
 
+/**
+ * ПОИСК ПО ID
+ */
 export function getCustomTopicById(id: string): CustomTopic | undefined {
   return loadCustomTopics().find((t) => t.id === id);
 }
 
+/**
+ * СОЗДАНИЕ ТЕМЫ
+ */
 export function createCustomTopic(data: {
   title: string;
   description: string;
@@ -44,7 +56,7 @@ export function createCustomTopic(data: {
     id: `custom_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     title: data.title.trim(),
     description: data.description.trim(),
-    emoji: data.emoji || "BookText", // Было: "📝"
+    emoji: data.emoji || "BookText",
     frontLabel: "Question",
     backLabel: "Answer",
     cards: [],
@@ -56,6 +68,9 @@ export function createCustomTopic(data: {
   return newTopic;
 }
 
+/**
+ * ОБНОВЛЕНИЕ ТЕМЫ
+ */
 export function updateCustomTopic(
   id: string,
   updates: { title?: string; description?: string; emoji?: string }
@@ -73,10 +88,16 @@ export function updateCustomTopic(
   return topics[idx];
 }
 
+/**
+ * УДАЛЕНИЕ ТЕМЫ
+ */
 export function deleteCustomTopic(id: string): void {
   saveCustomTopics(loadCustomTopics().filter((t) => t.id !== id));
 }
 
+/**
+ * ДОБАВЛЕНИЕ КАРТОЧКИ
+ */
 export function addCard(
   topicId: string,
   front: string,
@@ -94,6 +115,9 @@ export function addCard(
   return topics[idx];
 }
 
+/**
+ * ОБНОВЛЕНИЕ КАРТОЧКИ
+ */
 export function updateCard(
   topicId: string,
   cardId: string,
@@ -110,6 +134,9 @@ export function updateCard(
   return topics[tIdx];
 }
 
+/**
+ * УДАЛЕНИЕ КАРТОЧКИ
+ */
 export function deleteCard(topicId: string, cardId: string): CustomTopic | undefined {
   const topics = loadCustomTopics();
   const idx = topics.findIndex((t) => t.id === topicId);

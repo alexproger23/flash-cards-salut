@@ -122,3 +122,20 @@ Frontend может отправить обратно:
 | `done` | Резервное событие, отвечает `value` или `Готово` |
 
 Обработка находится в `src/sc/frontendEvents.sc`.
+
+
+Запуск
+```
+docker-compose up --build
+```
+
+запуск БЕЗ докера
+```
+cd back 
+node server.js
+
+cd..
+
+cd frontend
+npm run dev
+```

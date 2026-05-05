@@ -37,22 +37,6 @@ npm run build
 ```
 
 
-## База данных и Auth (Supabase)
-
-Проект использует **Supabase** в качестве бэкенда (PostgreSQL + GoTrue Auth). Все темы и карточки синхронизируются с облаком в реальном времени.
-
-### Настройка Supabase
-
-1. Создайте проект на [supabase.com](https://supabase.com/).
-2. В панели управления проектом перейдите в **Project Settings -> API**.
-3. Скопируйте **Project URL** и **API Key** (anon public).
-4. Добавьте их в ваш файл `frontend/.env`:
-
-```dotenv
-VITE_SUPABASE_URL='ваш_project_url'
-VITE_SUPABASE_ANON_KEY='ваш_anon_public_key'
-```
-
 ## Основная структура
 
 ```text
@@ -77,11 +61,6 @@ docs/salute-voice.md                # Формат команд SmartApp Code
     topics (id, user_id, title, description, emoji, is_public) — темы.
     cards (id, topic_id, front, back, created_at) — карточки внутри тем.
 
-
-Свои темы и результаты хранятся в `localStorage` браузера:
-
-- `flashcard_custom_topics`;
-- `flashcard_results_<topicId>`.
 
 ## Роуты
 

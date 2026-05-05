@@ -5,13 +5,7 @@ import {
   updateCustomTopic,
   getCustomTopicById,
 } from "../data/customTopics";
-import { useVoiceActionHandler, useVoiceAssistant } from "../voice/VoiceAssistantProvider";
-import {
-  actionMatches,
-  getActionString,
-  getTopicDescriptionFromAction,
-  getTopicTitleFromAction,
-} from "../voice/flashcardVoice";
+import { useVoiceAssistant } from "../voice/VoiceAssistantProvider";
 
 const EMOJI_OPTIONS = [
   "📝", "📚", "🔬", "🏛️", "🧮", "🌍", "💡", "🎵",
@@ -58,7 +52,7 @@ export function CreateEditTopic() {
   const navigate = useNavigate();
   const { topicId } = useParams<{ topicId: string }>();
   const isEditing = Boolean(topicId);
-  const { setAssistantState, speak } = useVoiceAssistant();
+  const { setAssistantState } = useVoiceAssistant();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -90,7 +84,6 @@ export function CreateEditTopic() {
   const saveTopic = (nextTitle = title, nextDescription = description, nextEmoji = emoji) => {
     if (!nextTitle.trim()) {
       setError("Please add a title for your topic.");
-      speak("Нужно название темы.", "topic_title_missing");
       return;
     }
     if (isEditing && topicId) {
@@ -113,44 +106,6 @@ export function CreateEditTopic() {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleSave();
   };
-
-  useVoiceActionHandler(
-    (action) => {
-      if (actionMatches(action, ["set_topic_title", "set_title"])) {
-        const nextTitle = getTopicTitleFromAction(action);
-        if (nextTitle) {
-          setTitle(nextTitle);
-          setError("");
-        }
-        return true;
-      }
-
-      if (actionMatches(action, ["set_topic_description", "set_description"])) {
-        setDescription(getTopicDescriptionFromAction(action) || getActionString(action, ["value"]));
-        return true;
-      }
-
-      if (actionMatches(action, ["set_topic_emoji", "set_emoji"])) {
-        const nextEmoji = getActionString(action, ["emoji", "icon", "value"]);
-        if (nextEmoji) {
-          setEmoji(nextEmoji);
-        }
-        return true;
-      }
-
-      if (actionMatches(action, ["create_topic", "save_topic"])) {
-        const nextTitle = getTopicTitleFromAction(action) || title;
-        const nextDescription = getTopicDescriptionFromAction(action) || description;
-        const nextEmoji = getActionString(action, ["emoji", "icon"]) || emoji;
-        saveTopic(nextTitle, nextDescription, nextEmoji);
-        return true;
-      }
-
-      return false;
-    },
-    [description, emoji, isEditing, navigate, speak, title, topicId],
-    20
-  );
 
   return (
     <div

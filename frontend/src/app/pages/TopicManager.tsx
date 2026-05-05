@@ -9,13 +9,7 @@ import {
   type CustomTopic,
   type CustomCard,
 } from "../data/customTopics";
-import { useVoiceActionHandler, useVoiceAssistant } from "../voice/VoiceAssistantProvider";
-import {
-  actionMatches,
-  findCardIdFromAction,
-  getCardBackFromAction,
-  getCardFrontFromAction,
-} from "../voice/flashcardVoice";
+import { useVoiceAssistant } from "../voice/VoiceAssistantProvider";
 
 // ─── Shared input style ───────────────────────────────────────────────────────
 
@@ -307,7 +301,7 @@ function AddCardForm({ topicId, onAdd, onCancel }: AddCardFormProps) {
 export function TopicManager() {
   const { topicId } = useParams<{ topicId: string }>();
   const navigate = useNavigate();
-  const { setAssistantState, speak } = useVoiceAssistant();
+  const { setAssistantState, startListening } = useVoiceAssistant();
 
   const [topic, setTopic] = useState<CustomTopic | null>(null);
   const [addingCard, setAddingCard] = useState(false);
@@ -350,72 +344,6 @@ export function TopicManager() {
       },
     });
   }, [addingCard, setAssistantState, topic]);
-
-  useVoiceActionHandler(
-    (action) => {
-      if (!topic) {
-        return false;
-      }
-
-      if (actionMatches(action, ["start_topic", "start_study", "practice_topic"])) {
-        if (topic.cards.length === 0) {
-          speak("В этой теме пока нет карточек.", "empty_topic");
-          return true;
-        }
-
-        navigate(`/study/${topic.id}`);
-        return true;
-      }
-
-      if (actionMatches(action, ["new_card", "open_new_card_form"])) {
-        setAddingCard(true);
-        return true;
-      }
-
-      if (actionMatches(action, ["add_card", "create_card"])) {
-        const front = getCardFrontFromAction(action);
-        const back = getCardBackFromAction(action);
-
-        if (!front || !back) {
-          setAddingCard(true);
-          speak("Продиктуй вопрос и ответ для новой карточки.", "card_data_missing");
-          return true;
-        }
-
-        const updated = addCard(topic.id, front, back);
-        if (updated) {
-          setTopic(updated);
-          setAddingCard(false);
-          speak("Карточка добавлена.", "card_created");
-        }
-        return true;
-      }
-
-      if (actionMatches(action, ["delete_card", "remove_card"])) {
-        const cardId = findCardIdFromAction(action, topic.cards);
-        if (!cardId) {
-          speak("Не нашла такую карточку.", "card_not_found");
-          return true;
-        }
-
-        const updated = deleteCard(topic.id, String(cardId));
-        if (updated) {
-          setTopic(updated);
-          speak("Карточка удалена.", "card_deleted");
-        }
-        return true;
-      }
-
-      if (actionMatches(action, ["edit_topic"])) {
-        navigate(`/topics/${topic.id}/edit`);
-        return true;
-      }
-
-      return false;
-    },
-    [navigate, speak, topic],
-    20
-  );
 
   if (!topic) return null;
 
@@ -508,7 +436,10 @@ export function TopicManager() {
         {/* Practice Button */}
         {topic.cards.length > 0 && (
           <button
-            onClick={() => navigate(`/study/${topic.id}`)}
+            onClick={() => {
+              startListening();
+              navigate(`/study/${topic.id}`);
+            }}
             className="w-full rounded-2xl py-4 text-sm mb-8 transition-all duration-150 active:scale-[0.99]"
             style={{
               backgroundColor: "#1a1a2e",

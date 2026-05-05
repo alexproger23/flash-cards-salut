@@ -1,5 +1,5 @@
 import { createAssistant, createSmartappDebugger } from "@salutejs/client";
-import { renderCompactNativePanel } from "./compactNativePanel";
+import { renderCompactNativePanel, startCompactNativePanelListening } from "./compactNativePanel";
 
 export type VoiceAction = {
   type: string;
@@ -23,6 +23,7 @@ type CreateVoiceAssistantOptions = {
   onAction: (action: VoiceAction, event: unknown) => void;
   onError: (error: unknown) => void;
   onStart?: (event: unknown, initialData: unknown) => void;
+  onTts?: (event: unknown) => void;
 };
 
 export type VoiceAssistantMode = "debugger" | "canvas" | "noop";
@@ -31,6 +32,7 @@ export type VoiceAssistantSetup = {
   assistant: VoiceAssistant;
   mode: VoiceAssistantMode;
   disabledReason?: string;
+  startListening: () => boolean;
 };
 
 const createNoopAssistant = (): VoiceAssistant => ({
@@ -179,6 +181,7 @@ export const createVoiceAssistant = ({
   onAction,
   onError,
   onStart,
+  onTts,
 }: CreateVoiceAssistantOptions): VoiceAssistantSetup => {
   const token = readEnv("VITE_SALUTE_TOKEN") || readEnv("REACT_APP_TOKEN");
   const smartapp = readEnv("VITE_SALUTE_SMARTAPP") || readEnv("REACT_APP_SMARTAPP");
@@ -196,6 +199,7 @@ export const createVoiceAssistant = ({
         getRecoveryState,
         nativePanel: {
           render: renderCompactNativePanel,
+          hideNativePanel: true,
           defaultText: "Скажи команду или введи ее текстом",
           screenshotMode: false,
           tabIndex: -1,
@@ -250,7 +254,8 @@ export const createVoiceAssistant = ({
   assistant.on("error", onError);
   assistant.on("tts", (event) => {
     console.log("assistant.on(tts)", event);
+    onTts?.(event);
   });
 
-  return { assistant, mode, disabledReason };
+  return { assistant, mode, disabledReason, startListening: startCompactNativePanelListening };
 };

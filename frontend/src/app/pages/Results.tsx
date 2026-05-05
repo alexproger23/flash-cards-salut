@@ -2,8 +2,7 @@ import React, { useEffect } from "react";
 import { useNavigate, useLocation, useParams } from "react-router";
 import { getTopicById } from "../data/flashcards";
 import { getCustomTopicById } from "../data/customTopics";
-import { useVoiceActionHandler, useVoiceAssistant } from "../voice/VoiceAssistantProvider";
-import { actionMatches } from "../voice/flashcardVoice";
+import { useVoiceAssistant } from "../voice/VoiceAssistantProvider";
 
 interface LocationState {
   known: number;
@@ -16,7 +15,7 @@ export function Results() {
   const navigate = useNavigate();
   const location = useLocation();
   const { topicId } = useParams<{ topicId: string }>();
-  const { setAssistantState } = useVoiceAssistant();
+  const { setAssistantState, startListening } = useVoiceAssistant();
 
   const state = location.state as LocationState | null;
   const builtIn = topicId ? getTopicById(topicId) : undefined;
@@ -40,28 +39,6 @@ export function Results() {
       results: state,
     });
   }, [isCustom, setAssistantState, state, topic]);
-
-  useVoiceActionHandler(
-    (action) => {
-      if (!topic) {
-        return false;
-      }
-
-      if (actionMatches(action, ["study_again", "restart_study", "start_study"])) {
-        navigate(`/study/${topic.id}`);
-        return true;
-      }
-
-      if (actionMatches(action, ["open_topic", "back_to_topic"]) && isCustom) {
-        navigate(`/topics/${topic.id}`);
-        return true;
-      }
-
-      return false;
-    },
-    [isCustom, navigate, topic],
-    20
-  );
 
   if (!state || !topic) {
     navigate("/");
@@ -138,7 +115,10 @@ export function Results() {
         {/* Actions */}
         <div className="flex flex-col gap-3 w-full">
           <button
-            onClick={() => navigate(`/study/${topic.id}`)}
+            onClick={() => {
+              startListening();
+              navigate(`/study/${topic.id}`);
+            }}
             className="w-full rounded-2xl py-4 text-sm transition-all duration-150 active:scale-95"
             style={{ backgroundColor: "#1a1a2e", color: "#ffffff" }}
             onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.backgroundColor = "#2a2a3e")}

@@ -1,21 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { topics, loadSessionResults } from "../data/flashcards";
-import { addCard, createCustomTopic, loadCustomTopics, type CustomTopic } from "../data/customTopics";
-import { useVoiceActionHandler, useVoiceAssistant } from "../voice/VoiceAssistantProvider";
-import {
-  actionMatches,
-  findTopicFromAction,
-  getCardBackFromAction,
-  getCardFrontFromAction,
-  getTopicDescriptionFromAction,
-  getTopicTitleFromAction,
-  isCustomVoiceTopic,
-} from "../voice/flashcardVoice";
+import { loadCustomTopics, type CustomTopic } from "../data/customTopics";
+import { useVoiceAssistant } from "../voice/VoiceAssistantProvider";
+import { isCustomVoiceTopic } from "../voice/flashcardVoice";
 
 export function Home() {
   const navigate = useNavigate();
-  const { setAssistantState, speak } = useVoiceAssistant();
+  const { setAssistantState, startListening } = useVoiceAssistant();
   const [customTopics, setCustomTopics] = useState<CustomTopic[]>([]);
 
   useEffect(() => {
@@ -43,76 +35,6 @@ export function Home() {
       },
     });
   }, [customTopics, setAssistantState]);
-
-  useVoiceActionHandler(
-    (action) => {
-      const allTopics = [...customTopics, ...topics];
-
-      if (actionMatches(action, ["new_topic", "open_new_topic_form"])) {
-        navigate("/topics/new");
-        return true;
-      }
-
-      if (actionMatches(action, ["create_topic"])) {
-        const title = getTopicTitleFromAction(action);
-        if (!title) {
-          navigate("/topics/new");
-          return true;
-        }
-
-        const created = createCustomTopic({
-          title,
-          description: getTopicDescriptionFromAction(action),
-          emoji: "📝",
-        });
-        setCustomTopics(loadCustomTopics());
-        navigate(`/topics/${created.id}`);
-        speak(`Тема ${created.title} создана.`, "topic_created");
-        return true;
-      }
-
-      if (actionMatches(action, ["open_topic", "start_topic", "start_study", "practice_topic"])) {
-        const topic = findTopicFromAction(action, allTopics);
-        if (!topic) {
-          speak("Не нашла такую тему.", "topic_not_found");
-          return true;
-        }
-
-        const shouldStudy = actionMatches(action, ["start_topic", "start_study", "practice_topic"]);
-        navigate(shouldStudy || !isCustomVoiceTopic(topic) ? `/study/${topic.id}` : `/topics/${topic.id}`);
-        return true;
-      }
-
-      if (actionMatches(action, ["add_card", "create_card"])) {
-        const topic = findTopicFromAction(action, allTopics);
-        const front = getCardFrontFromAction(action);
-        const back = getCardBackFromAction(action);
-
-        if (!topic || !isCustomVoiceTopic(topic)) {
-          speak("Карточки можно добавлять только в свою тему.", "card_topic_missing");
-          return true;
-        }
-
-        if (!front || !back) {
-          navigate(`/topics/${topic.id}`);
-          speak("Открой тему и продиктуй вопрос и ответ для карточки.", "card_data_missing");
-          return true;
-        }
-
-        const updated = addCard(topic.id, front, back);
-        setCustomTopics(loadCustomTopics());
-        if (updated) {
-          navigate(`/topics/${updated.id}`);
-          speak("Карточка добавлена.", "card_created");
-        }
-        return true;
-      }
-
-      return false;
-    },
-    [customTopics, navigate, speak],
-    10
-  );
 
   return (
     <div
@@ -252,7 +174,10 @@ export function Home() {
             return (
               <button
                 key={topic.id}
-                onClick={() => navigate(`/study/${topic.id}`)}
+                onClick={() => {
+                  startListening();
+                  navigate(`/study/${topic.id}`);
+                }}
                 className="w-full text-left rounded-2xl px-6 py-5 transition-all duration-200"
                 style={{
                   backgroundColor: "#ffffff",

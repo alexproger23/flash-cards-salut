@@ -1,5 +1,4 @@
 import { createAssistant, createSmartappDebugger } from "@salutejs/client";
-import { renderCompactNativePanel } from "./compactNativePanel";
 
 export type VoiceAction = {
   type: string;
@@ -131,7 +130,6 @@ export const createVoiceAssistant = ({
   const token = readEnv("VITE_SALUTE_TOKEN") || readEnv("REACT_APP_TOKEN");
   const smartapp = readEnv("VITE_SALUTE_SMARTAPP") || readEnv("REACT_APP_SMARTAPP");
   
-  // Определяем текущую тему системы для инициализации ассистента
   const currentTheme = document.documentElement.classList.contains("dark") ? "dark" : "light";
 
   let assistant: VoiceAssistant;
@@ -145,9 +143,10 @@ export const createVoiceAssistant = ({
         initPhrase: `Запусти ${smartapp}`,
         getState,
         getRecoveryState,
+        // Скрываем панель, возвращая null в функции рендеринга
         nativePanel: {
-          render: renderCompactNativePanel,
-          defaultText: "Скажи команду или введи ее текстом",
+          render: () => null, 
+          defaultText: "",
           screenshotMode: false,
           tabIndex: -1,
         },
@@ -160,7 +159,6 @@ export const createVoiceAssistant = ({
       console.warn(disabledReason);
     }
   } else {
-    // Передаем тему в обычный ассистент
     assistant = createAssistant({ 
       getState, 
       getRecoveryState,
@@ -168,7 +166,6 @@ export const createVoiceAssistant = ({
     mode = "canvas";
   }
 
-  // Принудительно уведомляем ассистента о теме сразу после старта
   assistant.on("start", (event) => {
     assistant.sendData({
       action: {

@@ -1,5 +1,5 @@
 import { topics, type Topic } from "../data/flashcards";
-import { loadCustomTopics, type CustomTopic } from "../data/customTopics";
+import { fetchUserData, type CustomTopic } from "../data/customTopics";
 import type { VoiceAction } from "./assistantClient";
 
 export type VoiceTopic = Topic | CustomTopic;
@@ -44,29 +44,40 @@ export const getActionNumber = (action: VoiceAction, keys: string[]): number | u
   return Number.isFinite(parsed) ? parsed : undefined;
 };
 
-export const getAllVoiceTopics = (): VoiceTopic[] => [
-  ...loadCustomTopics(),
-  ...topics,
-];
+// Делаем функцию асинхронной, так как теперь данные скачиваются с сервера
+export const getAllVoiceTopics = async (): Promise<VoiceTopic[]> => {
+  try {
+    const data = await fetchUserData();
+    const customTopics = data.customTopics || [];
+    return [...customTopics, ...topics];
+  } catch (error) {
+    console.error("Ошибка при загрузке тем для ассистента", error);
+    return [...topics]; // Если сервер не ответил, отдаем хотя бы базовые темы
+  }
+};
 
 export const isCustomVoiceTopic = (topic: VoiceTopic): topic is CustomTopic =>
   "isCustom" in topic && topic.isCustom === true;
 
-export const findTopicFromAction = (
+// Эта функция тоже стала асинхронной, так как использует getAllVoiceTopics
+export const findTopicFromAction = async (
   action: VoiceAction,
-  availableTopics: VoiceTopic[] = getAllVoiceTopics()
-): VoiceTopic | undefined => {
+  availableTopics?: VoiceTopic[]
+): Promise<VoiceTopic | undefined> => {
+  // Если темы не переданы напрямую, скачиваем их
+  const targetTopics = availableTopics ?? (await getAllVoiceTopics());
+
   const id = getActionString(action, ["topic_id", "topicId", "id"]);
   if (id) {
-    const byId = availableTopics.find((topic) => topic.id === id);
+    const byId = targetTopics.find((topic) => topic.id === id);
     if (byId) {
       return byId;
     }
   }
 
   const number = getActionNumber(action, ["topic_number", "topicNumber", "number"]);
-  if (number && availableTopics[number - 1]) {
-    return availableTopics[number - 1];
+  if (number && targetTopics[number - 1]) {
+    return targetTopics[number - 1];
   }
 
   const title = getActionString(action, ["topic_title", "topicTitle", "title", "topic", "name"]);
@@ -75,7 +86,7 @@ export const findTopicFromAction = (
   }
 
   const normalizedTitle = normalizeText(title);
-  return availableTopics.find((topic) => normalizeText(topic.title) === normalizedTitle);
+  return targetTopics.find((topic) => normalizeText(topic.title) === normalizedTitle);
 };
 
 export const findCardIdFromAction = (

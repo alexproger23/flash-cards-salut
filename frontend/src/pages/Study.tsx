@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router";
-import { ChevronLeft, X, Check, Info } from "lucide-react";
+import { ChevronLeft, X, Check, Info, Loader2 } from "lucide-react";
 import { getTopicById, saveSessionResult } from "../data/flashcards";
-import { getCustomTopicById } from "../data/customTopics";
+// Импортируем нашу новую асинхронную функцию и тип
+import { fetchUserData, type CustomTopic } from "../data/customTopics";
 import { FlashCard } from "./components/FlashCard";
 import { TopicIcon } from "./components/TopicIcon";
 
@@ -10,10 +11,10 @@ export function Study() {
   const { topicId } = useParams<{ topicId: string }>();
   const navigate = useNavigate();
 
-  const builtIn = topicId ? getTopicById(topicId) : undefined;
-  const custom = topicId ? getCustomTopicById(topicId) : undefined;
-  const topic = builtIn || custom;
-  const isCustom = Boolean(custom);
+  // Добавляем состояния для темы, статуса загрузки и флага пользовательской темы
+  const [topic, setTopic] = useState<any>(null);
+  const [isCustom, setIsCustom] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -21,10 +22,51 @@ export function Study() {
   const [unknown, setUnknown] = useState(0);
   const [cardKey, setCardKey] = useState(0);
 
+  // Асинхронная загрузка темы при старте
   useEffect(() => {
-    if (!topic) { navigate("/"); return; }
-    if (topic.cards.length === 0) { navigate(isCustom ? `/topics/${topicId}` : "/"); }
-  }, [topic, navigate, isCustom, topicId]);
+    const loadTopic = async () => {
+      if (!topicId) {
+        navigate("/");
+        return;
+      }
+
+      setIsLoading(true);
+      try {
+        // Сначала ищем среди пользовательских (на сервере)
+        const data = await fetchUserData();
+        const customTopic = data.customTopics?.find((t: CustomTopic) => t.id === topicId);
+
+        if (customTopic) {
+          setTopic(customTopic);
+          setIsCustom(true);
+        } else {
+          // Если не нашли на сервере, проверяем встроенные (базовые) темы
+          const builtIn = getTopicById(topicId);
+          if (builtIn) {
+            setTopic(builtIn);
+            setIsCustom(false);
+          } else {
+            navigate("/"); // Тема не найдена вообще
+            return;
+          }
+        }
+      } catch (error) {
+        console.error("Ошибка при загрузке темы:", error);
+        navigate("/");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadTopic();
+  }, [topicId, navigate]);
+
+  // Защита от пустых колод (проверяем только когда загрузка завершена)
+  useEffect(() => {
+    if (!isLoading && topic && topic.cards.length === 0) {
+      navigate(isCustom ? `/topics/${topicId}` : "/");
+    }
+  }, [isLoading, topic, navigate, isCustom, topicId]);
 
   const total = topic?.cards.length ?? 0;
   const card = topic && total > 0 ? topic.cards[currentIndex] : undefined;
@@ -46,7 +88,19 @@ export function Study() {
     }
   }, [card, currentIndex, isCustom, known, navigate, topic, total, unknown]);
 
+  // Экран загрузки
+  if (isLoading) {
+    return (
+      <div className="min-h-[100dvh] bg-background flex flex-col items-center justify-center">
+        <Loader2 className="animate-spin text-primary mb-4" size={40} />
+        <p className="text-muted-foreground font-medium animate-pulse">Загружаем карточки...</p>
+      </div>
+    );
+  }
+
+  // Заглушка, если после загрузки тема так и не нашлась
   if (!topic || !card || total === 0) return null;
+
   const progress = (currentIndex / total) * 100;
 
   return (
@@ -66,7 +120,7 @@ export function Study() {
           <div className="flex flex-col items-center max-w-[180px]">
             <div className="flex items-center gap-2 mb-0.5">
               <div className="text-primary flex-shrink-0">
-                <TopicIcon name={topic.emoji} size={16} />
+                <TopicIcon name={topic.emoji || topic.icon} size={16} />
               </div>
               <span className="font-black text-sm tracking-tight truncate">
                 {topic.title}
@@ -88,7 +142,7 @@ export function Study() {
           />
         </div>
 
-        {/* CARD CONTAINER - Используем класс из index.css */}
+        {/* CARD CONTAINER */}
         <div className="relative w-full h-[420px] perspective-1000 my-2">
           <FlashCard
             key={cardKey}

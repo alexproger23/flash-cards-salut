@@ -7,11 +7,8 @@ import {
   Target, Dna, Ruler, Languages, Theater, Ghost, Rocket
 } from "lucide-react";
 import { toast } from "sonner";
-import {
-  createCustomTopic,
-  updateCustomTopic,
-  getCustomTopicById,
-} from "../data/customTopics";
+// Импортируем наши новые функции для работы с сервером
+import { fetchUserData, saveCustomTopic, type CustomTopic } from "../data/customTopics";
 import { useVoiceActionHandler, useVoiceAssistant } from "../voice/VoiceAssistantProvider";
 import {
   actionMatches,
@@ -21,7 +18,7 @@ import {
 } from "../voice/flashcardVoice";
 import { TopicIcon } from "./components/TopicIcon";
 
-// Список современных иконок
+// Список современных иконoк
 const ICON_OPTIONS = [
   { id: "BookText", Icon: BookText },
   { id: "Brain", Icon: Brain },
@@ -82,17 +79,31 @@ export function CreateEditTopic() {
   const [description, setDescription] = useState("");
   const [iconId, setIconId] = useState("BookText");
   const [error, setError] = useState("");
+  
+  // Сохраняем исходную тему при редактировании, чтобы не потерять карточки
+  const [existingTopic, setExistingTopic] = useState<CustomTopic | null>(null);
 
+  // Асинхронная загрузка данных при редактировании
   useEffect(() => {
     if (isEditing && topicId) {
-      const topic = getCustomTopicById(topicId);
-      if (topic) {
-        setTitle(topic.title);
-        setDescription(topic.description);
-        setIconId(topic.emoji || "BookText");
-      } else {
-        navigate("/");
-      }
+      const loadTopic = async () => {
+        try {
+          const data = await fetchUserData();
+          const topic = data.customTopics.find((t: CustomTopic) => t.id === topicId);
+          if (topic) {
+            setExistingTopic(topic);
+            setTitle(topic.title);
+            setDescription(topic.description);
+            setIconId(topic.emoji || "BookText");
+          } else {
+            navigate("/");
+          }
+        } catch (error) {
+          console.error("Ошибка загрузки темы:", error);
+          navigate("/");
+        }
+      };
+      loadTopic();
     }
   }, [isEditing, topicId, navigate]);
 
@@ -105,7 +116,8 @@ export function CreateEditTopic() {
     });
   }, [description, iconId, isEditing, setAssistantState, title, topicId]);
 
-  const saveTopic = (nextTitle = title, nextDescription = description, nextIcon = iconId) => {
+  // Асинхронное сохранение/создание
+  const saveTopic = async (nextTitle = title, nextDescription = description, nextIcon = iconId) => {
     if (!nextTitle.trim()) {
       setError("Пожалуйста, введите название темы.");
       speak("Нужно название темы.", "topic_title_missing");
@@ -113,24 +125,36 @@ export function CreateEditTopic() {
     }
 
     try {
-      if (isEditing && topicId) {
-        updateCustomTopic(topicId, { 
+      if (isEditing && topicId && existingTopic) {
+        // Обновляем существующую
+        const updatedTopic = { 
+          ...existingTopic,
           title: nextTitle, 
           description: nextDescription, 
           emoji: nextIcon 
-        });
+        };
+        await saveCustomTopic(updatedTopic);
         toast.success("Изменения сохранены");
         navigate(`/topics/${topicId}`);
       } else {
-        const created = createCustomTopic({
+        // Создаем новую
+        const newTopic: CustomTopic = {
+          id: `custom-${Date.now()}`,
           title: nextTitle,
           description: nextDescription,
           emoji: nextIcon,
-        });
+          frontLabel: "Вопрос",
+          backLabel: "Ответ",
+          color: "#f0f4ff", // Дефолтный цвет
+          cards: [],
+          isCustom: true
+        };
+        await saveCustomTopic(newTopic);
         toast.success("Тема создана!");
-        navigate(`/topics/${created.id}`);
+        navigate(`/topics/${newTopic.id}`);
       }
     } catch (e) {
+      console.error("Ошибка сохранения:", e);
       toast.error("Ошибка при сохранении");
     }
   };
@@ -160,7 +184,7 @@ export function CreateEditTopic() {
       }
       return false;
     },
-    [description, iconId, isEditing, navigate, speak, title, topicId],
+    [description, iconId, isEditing, navigate, speak, title, topicId, existingTopic], // Добавили existingTopic в зависимости
     20
   );
 

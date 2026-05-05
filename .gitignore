@@ -1,6 +1,9 @@
 salut-smart-app/
 salut-smart-app
 
+frontend/package-lock.json
+back/package-lock.json
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

@@ -17,7 +17,6 @@ import {
 import {
   actionMatches,
   findTopicFromAction,
-  getAllVoiceTopics,
   getCardBackFromAction,
   getCardFrontFromAction,
   getTopicDescriptionFromAction,
@@ -25,7 +24,9 @@ import {
   isCustomVoiceTopic,
   type VoiceTopic,
 } from "./flashcardVoice";
-import { createCustomTopic, addCard, loadCustomTopics } from "../data/customTopics";
+// Новые импорты для работы с сервером
+import { fetchUserData, saveCustomTopic, type CustomTopic } from "../data/customTopics";
+import { topics as baseTopics } from "../data/flashcards";
 
 type NavigateOptions = {
   replace?: boolean;
@@ -68,10 +69,14 @@ const getTopicPath = (topic: VoiceTopic, mode: "open" | "study"): string => {
   return isCustomVoiceTopic(topic) ? `/topics/${topic.id}` : `/study/${topic.id}`;
 };
 
-const buildAssistantState = (screenState: AssistantScreenState): Record<string, unknown> => ({
+// Функция сборки состояния теперь принимает актуальный список тем
+const buildAssistantState = (
+  screenState: AssistantScreenState,
+  customTopics: CustomTopic[]
+): Record<string, unknown> => ({
   ...screenState,
   route: window.location.pathname,
-  customTopics: loadCustomTopics().map((topic, index) => ({
+  customTopics: customTopics.map((topic, index) => ({
     number: index + 1,
     id: topic.id,
     title: topic.title,
@@ -90,11 +95,29 @@ export function VoiceAssistantProvider({
   const assistantStateRef = useRef<AssistantScreenState>({ screen: "home" });
   const handlersRef = useRef<RegisteredHandler[]>([]);
   const nextHandlerIdRef = useRef(1);
+  
+  // Кэш тем для моментальных синхронных ответов ассистенту
+  const customTopicsRef = useRef<CustomTopic[]>([]);
 
   const [mode, setMode] = useState<VoiceAssistantMode>("noop");
   const [error, setError] = useState("");
   const [disabledReason, setDisabledReason] = useState("");
   const [lastAction, setLastAction] = useState<VoiceAction | null>(null);
+
+  // Функция для фонового обновления кэша тем
+  const refreshTopics = useCallback(async () => {
+    try {
+      const data = await fetchUserData();
+      customTopicsRef.current = data.customTopics || [];
+    } catch (e) {
+      console.error("Ошибка обновления кэша тем для Салют", e);
+    }
+  }, []);
+
+  // Обновляем кэш при первом запуске
+  useEffect(() => {
+    refreshTopics();
+  }, [refreshTopics]);
 
   const sendAssistantAction = useCallback(
     (actionId: string, parameters: Record<string, unknown> = {}) => {
@@ -115,8 +138,9 @@ export function VoiceAssistantProvider({
     [sendAssistantAction]
   );
 
+  // Теперь эта функция асинхронная
   const handleGlobalAction = useCallback(
-    (action: VoiceAction): boolean => {
+    async (action: VoiceAction): Promise<boolean> => {
       if (actionMatches(action, ["go_home", "home", "show_topics", "all_topics"])) {
         navigate("/");
         return true;
@@ -129,23 +153,38 @@ export function VoiceAssistantProvider({
         navigate("/topics/new");
         return true;
       }
+      
+      // Создание новой темы голосом
       if (actionMatches(action, ["create_topic"])) {
         const title = getTopicTitleFromAction(action);
         if (!title) {
           navigate("/topics/new");
           return true;
         }
-        const created = createCustomTopic({
+        
+        const newTopic: CustomTopic = {
+          id: `custom-${Date.now()}`,
           title,
-          description: getTopicDescriptionFromAction(action),
+          description: getTopicDescriptionFromAction(action) || "",
           emoji: "📝",
-        });
-        navigate(`/topics/${created.id}`);
-        speak(`Тема ${created.title} создана. Можно добавлять карточки.`, "topic_created");
+          frontLabel: "Вопрос",
+          backLabel: "Ответ",
+          color: "#f0f4ff",
+          cards: [],
+          isCustom: true
+        };
+        
+        await saveCustomTopic(newTopic);
+        await refreshTopics(); // Обновляем кэш для ассистента
+        
+        navigate(`/topics/${newTopic.id}`);
+        speak(`Тема ${newTopic.title} создана. Можно добавлять карточки.`, "topic_created");
         return true;
       }
+      
       if (actionMatches(action, ["open_topic", "start_topic", "start_study", "practice_topic"])) {
-        const topic = findTopicFromAction(action);
+        const availableTopics = [...customTopicsRef.current, ...baseTopics];
+        const topic = await findTopicFromAction(action, availableTopics);
         if (!topic) {
           speak("Не нашла такую тему.", "topic_not_found");
           return true;
@@ -156,10 +195,14 @@ export function VoiceAssistantProvider({
         navigate(getTopicPath(topic, mode));
         return true;
       }
+      
+      // Добавление карточки голосом
       if (actionMatches(action, ["add_card", "create_card"])) {
-        const topic = findTopicFromAction(action);
+        const availableTopics = [...customTopicsRef.current, ...baseTopics];
+        const topic = await findTopicFromAction(action, availableTopics);
         const front = getCardFrontFromAction(action);
         const back = getCardBackFromAction(action);
+        
         if (!topic || !isCustomVoiceTopic(topic)) {
           speak("Карточки можно добавлять только в свою тему.", "card_topic_missing");
           return true;
@@ -169,27 +212,35 @@ export function VoiceAssistantProvider({
           speak("Открой тему и продиктуй вопрос и ответ для новой карточки.", "card_data_missing");
           return true;
         }
-        const updated = addCard(topic.id, front, back);
-        if (updated) {
-          navigate(`/topics/${updated.id}`);
-          speak("Карточка добавлена.", "card_created");
-        }
+        
+        const newCard = { id: Date.now().toString(), front, back };
+        const updatedTopic = { ...topic, cards: [...topic.cards, newCard] };
+        
+        await saveCustomTopic(updatedTopic);
+        await refreshTopics(); // Обновляем кэш
+        
+        navigate(`/topics/${updatedTopic.id}`);
+        speak("Карточка добавлена.", "card_created");
         return true;
       }
       return false;
     },
-    [navigate, speak]
+    [navigate, speak, refreshTopics]
   );
 
+  // Сделали обработчик действий асинхронным
   const dispatchAction = useCallback(
-    (action: VoiceAction) => {
+    async (action: VoiceAction) => {
       setLastAction(action);
       setError("");
       const handlers = [...handlersRef.current].sort((a, b) => b.priority - a.priority || b.id - a.id);
+      
       for (const { handler } of handlers) {
         if (handler(action)) return;
       }
-      if (handleGlobalAction(action)) return;
+      
+      if (await handleGlobalAction(action)) return;
+      
       speak("Команда пока не поддерживается.", "unsupported_action");
     },
     [handleGlobalAction, speak]
@@ -210,10 +261,10 @@ export function VoiceAssistantProvider({
 
   useEffect(() => {
     const setup = createVoiceAssistant({
-      getState: () => buildAssistantState(assistantStateRef.current),
+      getState: () => buildAssistantState(assistantStateRef.current, customTopicsRef.current),
       getRecoveryState: () => ({
-        state: buildAssistantState(assistantStateRef.current),
-        topics: getAllVoiceTopics(),
+        state: buildAssistantState(assistantStateRef.current, customTopicsRef.current),
+        topics: [...customTopicsRef.current, ...baseTopics],
       }),
       onAction: (action) => dispatchAction(action),
       onError: (event) => {
@@ -253,7 +304,6 @@ export function VoiceAssistantProvider({
   return (
     <VoiceAssistantContext.Provider value={contextValue}>
       {children}
-      {/* Исправленное уведомление об ошибке: теперь оно темное в темной теме */}
       {error ? (
         <div
           role="alert"

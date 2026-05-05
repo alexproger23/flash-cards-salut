@@ -1,11 +1,12 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useLocation, useParams } from "react-router";
-import { RotateCcw, Home, LayoutList, Trophy, Star, CheckCircle2 } from "lucide-react";
+import { RotateCcw, Home, LayoutList, Trophy, Star, CheckCircle2, Loader2 } from "lucide-react";
 import { getTopicById } from "../data/flashcards";
-import { getCustomTopicById } from "../data/customTopics";
+// Импортируем асинхронный метод
+import { fetchUserData, type CustomTopic } from "../data/customTopics";
 import { useVoiceActionHandler, useVoiceAssistant } from "../voice/VoiceAssistantProvider";
 import { actionMatches } from "../voice/flashcardVoice";
-import { TopicIcon } from "./components/TopicIcon"; // Импортируем наш универсальный компонент
+import { TopicIcon } from "./components/TopicIcon";
 
 interface LocationState {
   known: number;
@@ -21,11 +22,50 @@ export function Results() {
   const { setAssistantState } = useVoiceAssistant();
 
   const state = location.state as LocationState | null;
-  const builtIn = topicId ? getTopicById(topicId) : undefined;
-  const custom = topicId ? getCustomTopicById(topicId) : undefined;
-  const topic = builtIn || custom;
-  const isCustom = Boolean(custom);
 
+  // Добавляем состояния для загрузки темы
+  const [topic, setTopic] = useState<any>(null);
+  const [isCustom, setIsCustom] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Асинхронная загрузка темы
+  useEffect(() => {
+    const loadTopic = async () => {
+      if (!topicId || !state) {
+        navigate("/");
+        return;
+      }
+
+      setIsLoading(true);
+      try {
+        const data = await fetchUserData();
+        const customTopic = data.customTopics?.find((t: CustomTopic) => t.id === topicId);
+
+        if (customTopic) {
+          setTopic(customTopic);
+          setIsCustom(true);
+        } else {
+          const builtIn = getTopicById(topicId);
+          if (builtIn) {
+            setTopic(builtIn);
+            setIsCustom(false);
+          } else {
+            navigate("/"); // Тема не найдена
+            return;
+          }
+        }
+      } catch (error) {
+        console.error("Ошибка при загрузке темы результатов:", error);
+        navigate("/");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadTopic();
+  }, [topicId, navigate, state]);
+
+  // Обновляем состояние ассистента, когда тема загружена
   useEffect(() => {
     if (!state || !topic) return;
 
@@ -41,6 +81,7 @@ export function Results() {
     });
   }, [isCustom, setAssistantState, state, topic]);
 
+  // Голосовые команды
   useVoiceActionHandler(
     (action) => {
       if (!topic) return false;
@@ -58,8 +99,18 @@ export function Results() {
     20
   );
 
+  // Экран загрузки
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center">
+        <Loader2 className="animate-spin text-primary mb-4" size={40} />
+        <p className="text-muted-foreground font-medium animate-pulse">Подводим итоги...</p>
+      </div>
+    );
+  }
+
+  // Если вдруг после загрузки темы нет или нет стейта
   if (!state || !topic) {
-    navigate("/");
     return null;
   }
 
@@ -94,7 +145,7 @@ export function Results() {
         {/* Бейдж темы с иконкой */}
         <div className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-muted/50 text-muted-foreground text-[10px] font-black uppercase tracking-widest mb-10 border border-border/50">
           <div className="text-primary">
-            <TopicIcon name={topic.emoji} size={14} />
+            <TopicIcon name={topic.emoji || topic.icon} size={14} />
           </div>
           <span className="truncate max-w-[150px]">{topic.title}</span>
         </div>

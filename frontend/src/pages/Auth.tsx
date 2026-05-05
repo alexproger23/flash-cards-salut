@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router";
-import { supabase } from "../lib/supabase";
+import { useAuth } from "../context/AuthContext"; // Импортируем наш хук
 import { Mail, Lock, LogIn, UserPlus, AlertCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -12,38 +12,44 @@ export function Auth() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
   const navigate = useNavigate();
-
-  const getFriendlyErrorMessage = (msg: string) => {
-    switch (msg) {
-      case "Invalid login credentials": return "Неверная почта или пароль";
-      case "User already registered": return "Пользователь с такой почтой уже существует";
-      case "Password should be at least 6 characters": return "Пароль должен быть не короче 6 символов";
-      case "Email not confirmed": return "Почта не подтверждена";
-      default: return msg;
-    }
-  };
+  const { login } = useAuth(); // Берем функцию login из контекста
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setErrorMsg(null);
 
+    // Выбираем правильный URL для нашего будущего сервера
+    const endpoint = isLogin ? "http://localhost:5000/api/auth/login" : "http://localhost:5000/api/auth/register";
+
     try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Произошла ошибка");
+      }
+
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+        // Если вход успешен, сервер должен вернуть token и данные юзера
+        login(data.token, data.user);
         toast.success("С возвращением!");
         navigate("/");
       } else {
-        const { error } = await supabase.auth.signUp({ email, password });
-        if (error) throw error;
         setIsLogin(true);
         toast.success("Регистрация успешна!", {
           description: "Теперь вы можете войти в свой аккаунт"
         });
       }
     } catch (error: any) {
-      setErrorMsg(getFriendlyErrorMessage(error.message));
+      setErrorMsg(error.message);
     } finally {
       setLoading(false);
     }
@@ -51,7 +57,6 @@ export function Auth() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
-      {/* Контейнер формы с эффектом стекла */}
       <form 
         onSubmit={handleSubmit} 
         className="w-full max-w-md bg-card border border-border p-8 md:p-10 rounded-[2.5rem] shadow-2xl backdrop-blur-xl z-10 transition-all duration-500"
@@ -68,7 +73,6 @@ export function Auth() {
           </p>
         </div>
 
-        {/* ПЛАШКА ОШИБКИ */}
         {errorMsg && (
           <div className="mb-6 flex items-center gap-3 p-4 rounded-2xl bg-destructive/10 border border-destructive/20 text-destructive text-sm animate-in fade-in slide-in-from-top-2">
             <AlertCircle size={18} className="shrink-0" />

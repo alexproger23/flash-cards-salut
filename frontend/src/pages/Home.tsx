@@ -15,7 +15,8 @@ import {
 // ТВОИ КОМПОНЕНТЫ
 import { TopicIcon } from "./components/TopicIcon"; 
 import { topics as builtInTopics } from "../data/flashcards";
-import { loadCustomTopics, type CustomTopic, deleteCustomTopic } from "../data/customTopics";
+// Импортируем новые функции для работы с бэкендом
+import { fetchUserData, deleteCustomTopic, hideDefaultTopic, type CustomTopic } from "../data/customTopics";
 import { useVoiceAssistant } from "../voice/VoiceAssistantProvider";
 import { useAuth } from "../context/AuthContext";
 import { isCustomVoiceTopic } from "../voice/flashcardVoice";
@@ -23,7 +24,7 @@ import { toast } from "sonner";
 
 export function Home() {
   const navigate = useNavigate();
-  const { user, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth(); // user.id больше не нужен, сервер определяет нас по токену
   const { setAssistantState } = useVoiceAssistant();
   
   const [customTopics, setCustomTopics] = useState<CustomTopic[]>([]);
@@ -31,29 +32,32 @@ export function Home() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; title: string; isCustom: boolean } | null>(null);
 
-  // Ключ для хранения скрытых ПРИМЕРОВ (индивидуальный для каждого юзера)
-  const getHiddenKey = () => user?.id ? `hidden_topics_${user.id}` : null;
-
+  // Обновленный useEffect, который стучится на сервер
   useEffect(() => {
-    if (isAuthenticated && user?.id) {
-      // Загружаем личные карты ЭТОГО юзера
-      setCustomTopics(loadCustomTopics(user.id));
-      
-      // Загружаем скрытые примеры ЭТОГО юзера
-      const key = getHiddenKey();
-      const savedHidden = key ? localStorage.getItem(key) : null;
-      if (savedHidden) {
-        const hiddenIds = JSON.parse(savedHidden);
-        setVisibleBuiltInTopics(builtInTopics.filter(t => !hiddenIds.includes(t.id)));
+    const loadData = async () => {
+      if (isAuthenticated) {
+        try {
+          // Запрашиваем данные у нашего сервера (он сам проверит токен)
+          const data = await fetchUserData();
+          
+          // Загружаем личные карты юзера
+          setCustomTopics(data.customTopics);
+          
+          // Фильтруем базовые карты (убираем те, ID которых есть в hiddenIds)
+          setVisibleBuiltInTopics(builtInTopics.filter(t => !data.hiddenIds.includes(t.id)));
+        } catch (error) {
+          console.error("Ошибка при загрузке данных с сервера:", error);
+          toast.error("Не удалось загрузить данные");
+        }
       } else {
+        // Если гость — показываем стандарт и пустые личные
+        setCustomTopics([]);
         setVisibleBuiltInTopics(builtInTopics);
       }
-    } else {
-      // Если гость — показываем стандарт и пустые личные
-      setCustomTopics([]);
-      setVisibleBuiltInTopics(builtInTopics);
-    }
-  }, [isAuthenticated, user?.id]);
+    };
+
+    loadData();
+  }, [isAuthenticated]);
 
   useEffect(() => {
     const allTopicsForVoice = [...customTopics, ...visibleBuiltInTopics];
@@ -69,29 +73,28 @@ export function Home() {
     });
   }, [customTopics, visibleBuiltInTopics, setAssistantState]);
 
-  const confirmDelete = () => {
+  // Обновленная асинхронная функция удаления
+  const confirmDelete = async () => {
     if (!deleteConfirm) return;
 
-    if (deleteConfirm.isCustom) {
-      // Удаляем личную тему только у текущего юзера
-      deleteCustomTopic(user?.id, deleteConfirm.id);
-      setCustomTopics(loadCustomTopics(user?.id));
-      toast.success(`Тема "${deleteConfirm.title}" удалена`);
-    } else {
-      // Скрываем пример только для текущего юзера
-      const key = getHiddenKey();
-      if (key) {
-        const savedHidden = localStorage.getItem(key);
-        const hiddenIds = savedHidden ? JSON.parse(savedHidden) : [];
-        if (!hiddenIds.includes(deleteConfirm.id)) {
-          const newHiddenIds = [...hiddenIds, deleteConfirm.id];
-          localStorage.setItem(key, JSON.stringify(newHiddenIds));
-        }
+    try {
+      if (deleteConfirm.isCustom) {
+        // Отправляем запрос на удаление личной темы
+        await deleteCustomTopic(deleteConfirm.id);
+        setCustomTopics(prev => prev.filter(t => t.id !== deleteConfirm.id));
+        toast.success(`Тема "${deleteConfirm.title}" удалена`);
+      } else {
+        // Отправляем запрос на скрытие базовой темы
+        await hideDefaultTopic(deleteConfirm.id);
+        setVisibleBuiltInTopics(prev => prev.filter(t => t.id !== deleteConfirm.id));
+        toast.success(`Тема "${deleteConfirm.title}" скрыта`);
       }
-      setVisibleBuiltInTopics(prev => prev.filter(t => t.id !== deleteConfirm.id));
-      toast.success(`Тема "${deleteConfirm.title}" удалена`);
+    } catch (error) {
+      console.error("Ошибка при удалении:", error);
+      toast.error("Не удалось удалить тему");
+    } finally {
+      setDeleteConfirm(null);
     }
-    setDeleteConfirm(null);
   };
 
   return (

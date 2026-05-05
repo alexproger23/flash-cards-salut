@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router";
 import { ArrowLeft, Plus, Trash2, Type, MessageSquare, Lock, Settings } from "lucide-react";
-import { loadCustomTopics, saveCustomTopics, type CustomTopic } from "../data/customTopics";
+// Заменили старые функции на новые для работы с бэкендом
+import { fetchUserData, saveCustomTopic, type CustomTopic } from "../data/customTopics";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
 
@@ -14,39 +15,67 @@ export function TopicManager() {
   const [topic, setTopic] = useState<CustomTopic | null>(null);
   const [newCard, setNewCard] = useState({ front: "", back: "" });
 
+  // Загружаем данные с бэкенда при открытии страницы
   useEffect(() => {
-    const all = loadCustomTopics();
-    const found = all.find(t => t.id === topicId);
-    if (found) setTopic(found);
-    else navigate("/");
+    const loadTopic = async () => {
+      try {
+        const data = await fetchUserData();
+        const found = data.customTopics.find((t: CustomTopic) => t.id === topicId);
+        if (found) {
+          setTopic(found);
+        } else {
+          toast.error("Тема не найдена");
+          navigate("/");
+        }
+      } catch (error) {
+        console.error("Ошибка загрузки:", error);
+        navigate("/");
+      }
+    };
+    
+    loadTopic();
   }, [topicId, navigate]);
 
-  const handleAddCard = (e: React.FormEvent) => {
+  // Асинхронное добавление карточки
+  const handleAddCard = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!topic || !newCard.front || !newCard.back) return;
 
     const updatedTopic = {
       ...topic,
-      cards: [...topic.cards, { id: Date.now().toString(), ...newCard }]
+      cards: [...topic.cards, { id: Date.now().toString(), front: newCard.front, back: newCard.back }]
     };
 
-    const all = loadCustomTopics();
-    const newAll = all.map(t => t.id === topic.id ? updatedTopic : t);
-    saveCustomTopics(newAll);
-    setTopic(updatedTopic);
-    setNewCard({ front: "", back: "" });
-    toast.success("Карточка добавлена");
+    try {
+      // Отправляем обновленную тему на сервер
+      await saveCustomTopic(updatedTopic);
+      // Обновляем состояние на экране только после успешного сохранения
+      setTopic(updatedTopic);
+      setNewCard({ front: "", back: "" });
+      toast.success("Карточка добавлена");
+    } catch (error) {
+      console.error("Ошибка сохранения:", error);
+      toast.error("Не удалось сохранить карточку");
+    }
   };
 
-  const deleteCard = (id: string) => {
+  // Асинхронное удаление карточки
+  const deleteCard = async (id: string) => {
     if (!topic) return;
     const updatedTopic = {
       ...topic,
       cards: topic.cards.filter(c => c.id !== id)
     };
-    const all = loadCustomTopics();
-    saveCustomTopics(all.map(t => t.id === topic.id ? updatedTopic : t));
-    setTopic(updatedTopic);
+    
+    try {
+      // Отправляем тему без удаленной карточки на сервер
+      await saveCustomTopic(updatedTopic);
+      setTopic(updatedTopic);
+      toast.success("Карточка удалена");
+    } catch (error) {
+      console.error("Ошибка удаления:", error);
+      toast.error("Не удалось удалить карточку");
+    }
   };
 
   if (!topic) return null;

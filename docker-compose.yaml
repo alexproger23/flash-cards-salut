@@ -1,0 +1,19 @@
+services:
+  backend:
+    build: ./back
+    container_name: my-app-backend
+    ports:
+      - "5000:5000" 
+    restart: always
+
+  frontend:
+    build: ./frontend
+    container_name: my-app-frontend
+    ports:
+      - "5173:5173" 
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - HOST=0.0.0.0
+    depends_on:
+      - backend
+    restart: always

@@ -1,12 +1,17 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from "react";
-import { supabase } from "../lib/supabase";
-import { User } from "@supabase/supabase-js";
+
+// Создаем свой тип пользователя вместо супабейзовского
+export interface User {
+  id: string;
+  email: string;
+}
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   loading: boolean;
-  logout: () => Promise<void>;
+  login: (token: string, userData: User) => void;
+  logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -16,47 +21,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let isMounted = true;
-
     const initAuth = async () => {
+      const token = localStorage.getItem("auth_token");
+      
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
       try {
-        // Проверяем сессию
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error) throw error;
-        
-        if (isMounted) {
-          setUser(session?.user ?? null);
+        // Стучимся на НАШ будущий бэкенд, чтобы проверить токен
+        const response = await fetch("http://localhost:5000/api/auth/me", {
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          const userData = await response.json();
+          setUser(userData);
+        } else {
+          // Если токен протух или неверный, удаляем его
+          localStorage.removeItem("auth_token");
         }
       } catch (err) {
-        console.error("Auth Init Error:", err);
+        console.error("Ошибка при проверке сессии:", err);
       } finally {
-        // Гарантируем выключение загрузки даже при ошибке
-        if (isMounted) setLoading(false);
+        setLoading(false);
       }
     };
 
     initAuth();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (isMounted) {
-        setUser(session?.user ?? null);
-        setLoading(false);
-      }
-    });
-
-    return () => {
-      isMounted = false;
-      subscription.unsubscribe();
-    };
   }, []);
 
-  const logout = async () => {
-    try {
-      await supabase.auth.signOut();
-      setUser(null);
-    } catch (error) {
-      console.error("Ошибка при выходе:", error);
-    }
+  const login = (token: string, userData: User) => {
+    localStorage.setItem("auth_token", token);
+    setUser(userData);
+  };
+
+  const logout = () => {
+    localStorage.removeItem("auth_token");
+    setUser(null);
   };
 
   return (
@@ -64,12 +69,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user, 
       isAuthenticated: !!user, 
       loading, 
+      login,
       logout 
     }}>
-      {/* Убираем {!loading && children}. 
-          Вместо этого рендерим всё сразу. 
-          Защиту от "прыгающего" контента мы уже сделали в router.tsx и самих страницах.
-      */}
       {children}
     </AuthContext.Provider>
   );

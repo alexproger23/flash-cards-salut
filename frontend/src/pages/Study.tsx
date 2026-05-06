@@ -22,7 +22,7 @@ export function Study() {
   const [unknown, setUnknown] = useState(0);
   const [cardKey, setCardKey] = useState(0);
 
-  // 👉 направление свайпа
+
   const [direction, setDirection] = useState<"left" | "right" | null>(null);
 
   useEffect(() => {

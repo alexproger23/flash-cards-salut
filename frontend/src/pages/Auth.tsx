@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router";
-import { useAuth } from "../context/AuthContext"; // Импортируем наш хук
+import { useAuth } from "../context/AuthContext"; 
 import { Mail, Lock, LogIn, UserPlus, AlertCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -12,14 +12,14 @@ export function Auth() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
   const navigate = useNavigate();
-  const { login } = useAuth(); // Берем функцию login из контекста
+  const { login } = useAuth(); 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setErrorMsg(null);
 
-    // Выбираем правильный URL для нашего будущего сервера
+    
     const endpoint = isLogin ? "http://localhost:5000/api/auth/login" : "http://localhost:5000/api/auth/register";
 
     try {
@@ -38,7 +38,7 @@ export function Auth() {
       }
 
       if (isLogin) {
-        // Если вход успешен, сервер должен вернуть token и данные юзера
+        
         login(data.token, data.user);
         toast.success("С возвращением!");
         navigate("/");

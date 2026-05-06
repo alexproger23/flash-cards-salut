@@ -6,11 +6,10 @@ import {
   Layers, 
   Trash2, 
   AlertCircle, 
-  Sparkles, 
   Play, 
   Settings2,
   BookOpen,
-  BrainCircuit
+  Brain
 } from "lucide-react";
 
 import { TopicIcon } from "./components/TopicIcon"; 
@@ -28,7 +27,7 @@ export function Home() {
   
   const [customTopics, setCustomTopics] = useState<CustomTopic[]>([]);
   const [visibleBuiltInTopics, setVisibleBuiltInTopics] = useState(builtInTopics);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; title: string; isCustom: boolean } | null>(null);
 
   useEffect(() => {
@@ -39,7 +38,7 @@ export function Home() {
           setCustomTopics(data.customTopics);
           setVisibleBuiltInTopics(builtInTopics.filter(t => !data.hiddenIds.includes(t.id)));
         } catch (error) {
-          console.error("Ошибка при загрузке данных:", error);
+          console.error("Ошибка при загрузке данных с сервера:", error);
           toast.error("Не удалось загрузить данные");
         }
       } else {
@@ -47,6 +46,7 @@ export function Home() {
         setVisibleBuiltInTopics(builtInTopics);
       }
     };
+
     loadData();
   }, [isAuthenticated]);
 
@@ -64,17 +64,9 @@ export function Home() {
     });
   }, [customTopics, visibleBuiltInTopics, setAssistantState]);
 
-  const handleTestClick = (e: React.MouseEvent, topic: any) => {
-    e.stopPropagation();
-    if (topic.cards.length < 5) {
-      toast.error(`Для теста нужно минимум 5 карточек (сейчас: ${topic.cards.length})`);
-      return;
-    }
-    navigate("/test", { state: { autoStartTopicId: topic.id } });
-  };
-
   const confirmDelete = async () => {
     if (!deleteConfirm) return;
+
     try {
       if (deleteConfirm.isCustom) {
         await deleteCustomTopic(deleteConfirm.id);
@@ -86,7 +78,8 @@ export function Home() {
         toast.success(`Тема "${deleteConfirm.title}" скрыта`);
       }
     } catch (error) {
-      toast.error("Ошибка удаления");
+      console.error("Ошибка при удалении:", error);
+      toast.error("Не удалось удалить тему");
     } finally {
       setDeleteConfirm(null);
     }
@@ -99,7 +92,7 @@ export function Home() {
           <Layers size={32} strokeWidth={2.5} />
         </div>
         <h1 className="text-5xl font-black tracking-tight mb-3 uppercase italic">Flash-cards</h1>
-        <p className="text-muted-foreground font-medium max-w-xs mx-auto text-sm opacity-70 uppercase tracking-widest leading-none text-center">Твоя библиотека знаний</p>
+        <p className="text-muted-foreground font-medium max-w-xs mx-auto text-sm opacity-70 uppercase tracking-widest leading-none">Твоя библиотека знаний</p>
       </header>
 
       <div className="max-w-xl mx-auto">
@@ -108,74 +101,86 @@ export function Home() {
             <h2 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.25em]">Библиотека</h2>
             <span className="text-[10px] font-bold text-primary uppercase italic leading-none">Личные коллекции</span>
           </div>
-          
           <button
-            onClick={() => isAuthenticated ? navigate("/topics/new") : setIsAuthModalOpen(true)}
-            className="flex items-center gap-2 text-[11px] font-black uppercase px-5 py-3 rounded-2xl bg-primary text-primary-foreground transition-all hover:opacity-90 active:scale-95 shadow-md shadow-primary/20"
+            onClick={() => isAuthenticated ? navigate("/topics/new") : navigate("/auth")}
+            className="flex items-center gap-2 text-[11px] font-black uppercase px-6 py-3 rounded-2xl bg-primary text-primary-foreground transition-all hover:opacity-90 active:scale-95 shadow-md shadow-primary/20"
           >
             <Plus size={14} strokeWidth={4} /> Создать
           </button>
         </div>
 
+        {/* СЕКЦИЯ ЛИЧНЫХ КАРТ */}
         <section className="space-y-4 mb-14">
           {!isAuthenticated ? (
-            <button onClick={() => setIsAuthModalOpen(true)} className="w-full rounded-[2.5rem] py-12 bg-card border-2 border-dashed border-border flex flex-col items-center hover:bg-muted/50 transition-all group">
+            <button 
+              onClick={() => navigate("/auth")} 
+              className="w-full rounded-[2.5rem] py-12 bg-card border-2 border-dashed border-border flex flex-col items-center hover:bg-muted/50 transition-all group"
+            >
               <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mb-4 text-muted-foreground group-hover:text-primary transition-all">
                 <Lock size={24} />
               </div>
               <p className="font-black text-lg mb-1 uppercase tracking-tighter">Личное пространство</p>
-              <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest opacity-60">Требуется вход</p>
+              <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest opacity-60">Нажми, чтобы войти</p>
             </button>
           ) : (
-            customTopics.map((topic) => (
-              <div key={topic.id} className="relative group flex gap-2">
-                <button
-                  onClick={() => navigate(`/study/${topic.id}`)}
-                  className="flex-1 text-left rounded-[2.2rem] p-5 flex items-center justify-between transition-all bg-card border border-border hover:border-primary/40 hover:shadow-xl shadow-sm"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
-                      <TopicIcon name={topic.emoji} size={24} />
+            customTopics.length > 0 ? (
+              customTopics.map((topic) => (
+                <div key={topic.id} className="relative group flex gap-3">
+                  <button
+                    onClick={() => navigate(`/study/${topic.id}`)}
+                    className="flex-1 text-left rounded-[2.2rem] p-5 flex items-center justify-between transition-all bg-card border border-border hover:border-primary/40 hover:shadow-xl shadow-sm"
+                  >
+                    <div className="flex items-center gap-5">
+                      <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
+                        <TopicIcon name={topic.emoji} size={28} />
+                      </div>
+                      <div>
+                        <h3 className="font-black text-lg leading-tight mb-1">{topic.title}</h3>
+                        <span className="text-[10px] font-black uppercase text-primary tracking-widest italic">Повторять</span>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-black text-base leading-tight mb-0.5">{topic.title}</h3>
-                      <span className="text-[9px] font-black uppercase text-primary tracking-widest italic">Учить карточки</span>
-                    </div>
-                  </div>
-                  <Play size={18} className="text-primary opacity-40 group-hover:opacity-100 transition-opacity" />
-                </button>
+                    <Play size={20} className="text-primary fill-current" />
+                  </button>
 
-                <button
-                  onClick={(e) => handleTestClick(e, topic)}
-                  className={`w-14 rounded-[1.8rem] border flex flex-col items-center justify-center transition-all ${
-                    topic.cards.length >= 5 
-                    ? "bg-secondary border-border text-secondary-foreground hover:bg-primary hover:text-primary-foreground" 
-                    : "bg-muted border-border text-muted-foreground opacity-50 cursor-not-allowed"
-                  }`}
-                >
-                  <BrainCircuit size={18} />
-                  <span className="text-[7px] font-black uppercase mt-1">Тест</span>
-                </button>
+                  {/* КНОПКА ТЕСТА ДЛЯ ЛИЧНЫХ ТЕМ */}
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      navigate("/tests", { state: { autoStartTopicId: topic.id } });
+                    }}
+                    className="w-16 rounded-[2rem] bg-muted/30 border border-border flex flex-col items-center justify-center text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-all shadow-sm hover:shadow-md"
+                  >
+                    <Brain size={20} />
+                    <span className="text-[8px] font-black uppercase mt-1">Тест</span>
+                  </button>
 
-                <button
-                  onClick={() => navigate(`/topics/${topic.id}`)}
-                  className="w-14 rounded-[1.8rem] bg-muted border border-border flex flex-col items-center justify-center text-muted-foreground hover:bg-foreground hover:text-background transition-all"
-                >
-                  <Settings2 size={18} />
-                  <span className="text-[7px] font-black uppercase mt-1 leading-none text-center">Изменить</span>
-                </button>
+                  {/* КНОПКА РЕДАКТИРОВАНИЯ */}
+                  <button
+                    onClick={() => navigate(`/topics/${topic.id}`)}
+                    className="w-16 rounded-[2rem] bg-muted/30 border border-border flex flex-col items-center justify-center text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-all shadow-sm hover:shadow-md"
+                  >
+                    <Settings2 size={20} />
+                    <span className="text-[8px] font-black uppercase mt-1">Ред.</span>
+                  </button>
 
-                <button 
-                  onClick={() => setDeleteConfirm({ id: topic.id, title: topic.title, isCustom: true })}
-                  className="absolute -right-1 -top-1 w-7 h-7 bg-background border-2 border-border text-muted-foreground rounded-full flex items-center justify-center shadow-lg transition-all z-20 md:opacity-0 md:group-hover:opacity-100 hover:bg-destructive hover:text-white"
-                >
-                  <Trash2 size={12} strokeWidth={3} />
-                </button>
+                  <button 
+                    onClick={() => setDeleteConfirm({ id: topic.id, title: topic.title, isCustom: true })}
+                    className="absolute -right-2 -top-2 w-8 h-8 bg-background border-2 border-border text-muted-foreground rounded-full flex items-center justify-center shadow-lg transition-all z-20 md:opacity-0 md:group-hover:opacity-100 hover:bg-[#ef4444] hover:text-white hover:border-[#ef4444] hover:scale-110"
+                  >
+                    <Trash2 size={14} strokeWidth={3} />
+                  </button>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-10 border-2 border-dashed border-border rounded-[2.5rem] opacity-50">
+                <p className="text-xs font-black uppercase italic">Коллекция пуста</p>
               </div>
-            ))
+            )
           )}
         </section>
 
+        {/* СЕКЦИЯ ПРИМЕРОВ */}
         <div className="flex items-center gap-6 mb-10 opacity-60">
           <div className="flex-1 h-px bg-border" />
           <span className="text-[10px] font-black uppercase tracking-[0.5em] text-muted-foreground">Примеры</span>
@@ -184,58 +189,74 @@ export function Home() {
 
         <section className="grid grid-cols-1 gap-4">
           {visibleBuiltInTopics.map((topic) => (
-            <div key={topic.id} className="relative group flex gap-2">
+            <div key={topic.id} className="relative group flex gap-3">
               <button 
                 onClick={() => navigate(`/study/${topic.id}`)} 
                 className="flex-1 text-left rounded-[2.2rem] p-5 flex items-center justify-between transition-all bg-card border border-border hover:border-primary/20 hover:shadow-lg shadow-sm"
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center text-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-                    <TopicIcon name={topic.emoji} size={22} />
+                <div className="flex items-center gap-5">
+                  <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center text-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                    <TopicIcon name={topic.emoji} size={26} />
                   </div>
                   <div>
-                    <h3 className="font-black text-base leading-tight mb-0.5">{topic.title}</h3>
-                    <span className="text-[9px] font-black uppercase text-muted-foreground tracking-widest italic flex items-center gap-1">
-                      Учить карточки
-                    </span>
+                    <h3 className="font-black text-lg leading-tight mb-1">{topic.title}</h3>
+                    <p className="text-[10px] font-black uppercase text-muted-foreground flex items-center gap-2 italic">
+                      <BookOpen size={10} /> Стандартный набор
+                    </p>
                   </div>
                 </div>
+                <Play size={20} className="text-muted-foreground group-hover:text-primary transition-colors" />
               </button>
 
+              {/* КНОПКА ТЕСТА ДЛЯ БАЗОВЫХ ТЕМ */}
               <button
-                onClick={(e) => handleTestClick(e, topic)}
-                className={`w-14 rounded-[1.8rem] border flex flex-col items-center justify-center transition-all ${
-                  topic.cards.length >= 5 
-                  ? "bg-secondary border-border text-secondary-foreground hover:bg-primary hover:text-primary-foreground" 
-                  : "bg-muted border-border text-muted-foreground opacity-50"
-                }`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  navigate("/tests", { state: { autoStartTopicId: topic.id } });
+                }}
+                className="w-16 rounded-[2rem] bg-muted/30 border border-border flex flex-col items-center justify-center text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-all shadow-sm hover:shadow-md"
               >
-                <BrainCircuit size={18} />
-                <span className="text-[7px] font-black uppercase mt-1">Тест</span>
+                <Brain size={20} />
+                <span className="text-[8px] font-black uppercase mt-1">Тест</span>
               </button>
 
               <button 
                 onClick={() => setDeleteConfirm({ id: topic.id, title: topic.title, isCustom: false })}
-                className="absolute -right-1 -top-1 w-7 h-7 bg-background border-2 border-border text-muted-foreground rounded-full flex items-center justify-center transition-all z-20 md:opacity-0 md:group-hover:opacity-100 shadow-lg hover:bg-destructive hover:text-white"
+                className="absolute -right-2 -top-2 w-8 h-8 bg-background border-2 border-border text-muted-foreground rounded-full flex items-center justify-center transition-all z-20 md:opacity-0 md:group-hover:opacity-100 shadow-lg hover:bg-[#ef4444] hover:text-white hover:border-[#ef4444] hover:scale-110"
               >
-                <Trash2 size={12} strokeWidth={3} />
+                <Trash2 size={14} strokeWidth={3} />
               </button>
             </div>
           ))}
         </section>
       </div>
 
+      {/* МОДАЛКА УДАЛЕНИЯ */}
       {deleteConfirm && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
           <div className="absolute inset-0 bg-background/80 backdrop-blur-md" onClick={() => setDeleteConfirm(null)} />
-          <div className="relative bg-card border-2 border-border shadow-2xl rounded-[2.5rem] max-w-xs w-full p-8 text-center">
-            <div className="w-16 h-16 bg-destructive/10 text-destructive rounded-2xl flex items-center justify-center mx-auto mb-6">
+          <div className="relative bg-card border-2 border-border shadow-2xl rounded-[2.5rem] max-w-xs w-full p-8 text-center animate-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 bg-destructive/10 text-[#ef4444] rounded-2xl flex items-center justify-center mx-auto mb-6">
               <AlertCircle size={32} />
             </div>
-            <h3 className="text-xl font-black mb-2 uppercase italic text-center">Удалить?</h3>
-            <div className="flex flex-col gap-2 mt-6">
-              <button onClick={confirmDelete} className="w-full py-4 bg-destructive text-white rounded-2xl font-black uppercase tracking-widest text-[11px]">Удалить</button>
-              <button onClick={() => setDeleteConfirm(null)} className="w-full py-4 bg-muted text-foreground rounded-2xl font-black uppercase tracking-widest text-[11px]">Отмена</button>
+            <h3 className="text-xl font-black mb-2 uppercase italic">Удалить?</h3>
+            <p className="text-muted-foreground text-sm mb-8 font-medium italic tracking-tight">
+              "{deleteConfirm.title}" исчезнет из библиотеки.
+            </p>
+            <div className="flex flex-col gap-2">
+              <button 
+                onClick={confirmDelete} 
+                className="w-full py-4 bg-[#ef4444] text-white rounded-2xl font-black uppercase tracking-widest text-[11px] shadow-lg shadow-red-500/20 active:scale-95"
+              >
+                Удалить
+              </button>
+              <button 
+                onClick={() => setDeleteConfirm(null)} 
+                className="w-full py-4 bg-muted text-foreground rounded-2xl font-black uppercase tracking-widest text-[11px] active:scale-95"
+              >
+                Отмена
+              </button>
             </div>
           </div>
         </div>

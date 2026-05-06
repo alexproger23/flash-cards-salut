@@ -1,5 +1,5 @@
 import { useAuth } from "../context/AuthContext";
-import { LogOut, LayoutGrid, PlusCircle, UserCircle2, Sun, Moon } from "lucide-react";
+import { LogOut, LayoutGrid, PlusCircle, UserCircle2, Sun, Moon, BrainCircuit } from "lucide-react";
 import { useNavigate } from "react-router";
 import { useEffect, useState } from "react";
 import { useVoiceAssistant } from "../voice/VoiceAssistantProvider";
@@ -16,7 +16,6 @@ export function Sidebar() {
 
   useEffect(() => {
     const root = window.document.documentElement;
-    const theme = isDark ? "dark" : "light";
     
     if (isDark) {
       root.classList.add("dark");
@@ -26,7 +25,7 @@ export function Sidebar() {
       localStorage.setItem("theme", "light");
     }
 
-    sendAssistantAction("set_theme", { theme });
+    sendAssistantAction("set_theme", { theme: isDark ? "dark" : "light" });
   }, [isDark, sendAssistantAction]);
 
   if (!user) return null;
@@ -36,7 +35,7 @@ export function Sidebar() {
       {/* Контейнер всей группы с наведением */}
       <div className="group relative inline-block">
         
-        {/* Кнопка-триггер (теперь она часть общей области наведения) */}
+        {/* Кнопка-триггер */}
         <button className="flex items-center gap-3 bg-card border border-border p-1.5 pr-4 rounded-full transition-all hover:border-primary/50 hover:shadow-lg active:scale-95 group-hover:bg-background relative z-10">
           <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-emerald-600 flex items-center justify-center text-white shadow-md">
             <UserCircle2 size={20} strokeWidth={2.5} />
@@ -49,13 +48,9 @@ export function Sidebar() {
           </div>
         </button>
 
-        {/* ВЫПАДАЮЩЕЕ МЕНЮ С МОСТИКОМ 
-            pt-3 создает невидимую зону между кнопкой и меню.
-            Это лечит проблему "захлопывания" меню при движении мышки вниз.
-        */}
+        {/* ВЫПАДАЮЩЕЕ МЕНЮ С МОСТИКОМ */}
         <div className="absolute top-full left-0 pt-3 w-64 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 transform origin-top-left group-hover:scale-100 scale-95">
           
-          {/* Контейнер со стилями самого меню */}
           <div className="bg-card border border-border rounded-[2rem] p-3 shadow-2xl overflow-hidden">
             
             <div className="px-4 py-3 mb-2 bg-muted/30 rounded-[1.5rem]">
@@ -68,7 +63,13 @@ export function Sidebar() {
                 onClick={() => navigate("/")}
                 className="w-full flex items-center gap-3 px-4 py-3 hover:bg-primary/10 hover:text-primary rounded-[1.25rem] transition-all text-sm font-bold"
               >
-                <LayoutGrid size={18} strokeWidth={2.5} /> Все темы
+                <LayoutGrid size={18} strokeWidth={2.5} /> Главная
+              </button>
+              <button
+                onClick={() => navigate("/test")}
+                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-primary/10 hover:text-primary rounded-[1.25rem] transition-all text-sm font-bold"
+              >
+                <BrainCircuit size={18} strokeWidth={2.5} /> Режим теста
               </button>
               <button
                 onClick={() => navigate("/topics/new")}

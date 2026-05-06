@@ -6,6 +6,5 @@ declare module "@salutejs/client" {
 interface ImportMetaEnv {
   readonly VITE_SALUTE_TOKEN?: string;
   readonly VITE_SALUTE_SMARTAPP?: string;
-  readonly REACT_APP_TOKEN?: string;
-  readonly REACT_APP_SMARTAPP?: string;
+ 
 }

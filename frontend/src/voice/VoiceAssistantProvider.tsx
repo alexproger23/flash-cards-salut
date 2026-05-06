@@ -7,7 +7,6 @@ import React, {
   useRef,
   useState,
 } from "react";
-// useNavigate УДАЛЕН отсюда
 import {
   createVoiceAssistant,
   formatAssistantError,
@@ -24,7 +23,6 @@ import {
 import { fetchUserData, saveCustomTopic, type CustomTopic } from "../data/customTopics";
 import { topics as baseTopics } from "../data/flashcards";
 
-// Вспомогательная функция для определения пути темы
 const getTopicPath = (topic: any, mode: 'study' | 'open') => {
   return mode === 'study' ? `/study/${topic.id}` : `/topics/${topic.id}`;
 };
@@ -77,11 +75,11 @@ const getTtsState = (event: unknown): string => {
   if (!isRecord(event)) return "";
 
   const nestedCandidates = [
-    event.payload,
-    event.tts,
-    event.tts_state,
-    event.tts_state_update,
-    event.smart_app_data,
+    (event as any).payload,
+    (event as any).tts,
+    (event as any).tts_state,
+    (event as any).tts_state_update,
+    (event as any).smart_app_data,
   ];
 
   for (const candidate of nestedCandidates) {
@@ -105,17 +103,15 @@ const buildAssistantState = (
   })),
 });
 
-// Добавлен тип для пропса navigate
 type NavigateFn = (to: string | number, options?: { replace?: boolean; state?: any }) => void;
 
 export function VoiceAssistantProvider({ 
   children, 
-  navigate // Теперь получаем navigate из пропсов
+  navigate 
 }: { 
   children: React.ReactNode;
   navigate: NavigateFn; 
 }) {
-  // const navigate = useNavigate(); <--- ЭТА СТРОКА УДАЛЕНА
   const assistantRef = useRef<VoiceAssistant | null>(null);
   const startListeningRef = useRef<() => boolean>(() => false);
   const speakingTimeoutRef = useRef<number | null>(null);
@@ -157,7 +153,10 @@ export function VoiceAssistantProvider({
     []
   );
 
-  const startListening = useCallback((): boolean => startListeningRef.current(), []);
+  const startListening = useCallback((): boolean => {
+    console.log("Попытка включить микрофон...");
+    return startListeningRef.current();
+  }, []);
 
   const speak = useCallback(
     (text: string, reason = "feedback") => {
@@ -182,32 +181,6 @@ export function VoiceAssistantProvider({
         return true;
       }
       
-      if (actionMatches(action, ["create_topic"])) {
-        const title = getTopicTitleFromAction(action);
-        if (!title) {
-          navigate("/topics/new");
-          return true;
-        }
-        
-        const newTopic: CustomTopic = {
-          id: `custom-${Date.now()}`,
-          title,
-          description: getTopicDescriptionFromAction(action) || "",
-          emoji: "📝",
-          frontLabel: "Вопрос",
-          backLabel: "Ответ",
-          color: "#f0f4ff",
-          cards: [],
-          isCustom: true
-        };
-        
-        await saveCustomTopic(newTopic);
-        await refreshTopics();
-        navigate(`/topics/${newTopic.id}`);
-        speak(`Тема ${newTopic.title} создана.`, "topic_created");
-        return true;
-      }
-      
       if (actionMatches(action, ["open_topic", "start_topic", "start_study"])) {
         const availableTopics = [...customTopicsRef.current, ...baseTopics];
         const topic = await findTopicFromAction(action, availableTopics);
@@ -222,20 +195,31 @@ export function VoiceAssistantProvider({
       
       return false;
     },
-    [navigate, speak, refreshTopics]
+    [navigate, speak]
   );
 
   const dispatchAction = useCallback(
     async (action: VoiceAction) => {
+      // КЛЮЧЕВОЙ ЛОГ: посмотри его в консоли Chrome F12
+      console.log(">>> САЛЮТ ПРИСЛАЛ ЭКШЕН:", action.type, action);
+
       setLastAction(action);
       setError("");
       
       const handlers = [...handlersRef.current].sort((a, b) => b.priority - a.priority || b.id - a.id);
+      
+      // Сначала даем шанс локальным обработчикам (например, в компоненте Flashcard)
       for (const { handler } of handlers) {
-        if (handler(action)) return;
+        if (handler(action)) {
+            console.log("Экшен обработан локальным хэндлером");
+            return;
+        }
       }
       
+      // Если никто на странице не забрал экшен, проверяем глобальные
       if (await handleGlobalAction(action)) return;
+      
+      console.warn("Команда не была обработана ни одним хэндлером");
       speak("Команда пока не поддерживается.", "unsupported_action");
     },
     [handleGlobalAction, speak]
@@ -243,20 +227,16 @@ export function VoiceAssistantProvider({
 
   const setAssistantState = useCallback((state: AssistantScreenState) => {
     assistantStateRef.current = state;
-    if (state.screen !== "study") {
-      setRecognizedFinal(false);
-      setRecognizedText("");
-      setRecognizedStatus("idle");
-      setIsSpeaking(false);
-    }
   }, []);
 
   const registerHandler = useCallback((handler: VoiceActionHandler, priority = 0) => {
     const id = nextHandlerIdRef.current;
     nextHandlerIdRef.current += 1;
     handlersRef.current = [...handlersRef.current, { id, priority, handler }];
+    console.log(`Зарегистрирован новый хэндлер (ID: ${id}, Priority: ${priority})`);
     return () => {
       handlersRef.current = handlersRef.current.filter((entry) => entry.id !== id);
+      console.log(`Удален хэндлер (ID: ${id})`);
     };
   }, []);
 

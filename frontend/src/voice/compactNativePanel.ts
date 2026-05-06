@@ -41,7 +41,6 @@ const notifyRecognitionSubscribers = (final = false) => {
   recognitionSubscribers.forEach((subscriber) => subscriber(state));
 };
 
-// ИСПОЛЬЗУЕМ ПЕРЕМЕННЫЕ ТЕМЫ
 const panelStyles = `
   .FlashcardsSalutePanel {
     position: fixed;
@@ -92,7 +91,7 @@ const panelStyles = `
   }
 
   .FlashcardsSalutePanel__mic[data-active="true"] {
-    background: #ef4444; /* Цвет записи */
+    background: #ef4444;
     animation: pulse-red 1.5s infinite;
   }
 
@@ -288,9 +287,6 @@ export const renderCompactNativePanel = (props: CompactNativePanelProps) => {
   }
 
   render(props);
-<<<<<<< HEAD:frontend/src/voice/compactNativePanel.ts
-};
-=======
 };
 
 export const startCompactNativePanelListening = (): boolean => {
@@ -312,4 +308,3 @@ export const subscribeCompactNativePanelRecognition = (
     recognitionSubscribers.delete(subscriber);
   };
 };
->>>>>>> df347738be23e3ef152b1d04b42d68ee096a0191:frontend/src/app/voice/compactNativePanel.ts

@@ -7,6 +7,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+// useNavigate УДАЛЕН отсюда
 import {
   createVoiceAssistant,
   formatAssistantError,
@@ -14,32 +15,19 @@ import {
   type VoiceAssistant,
   type VoiceAssistantMode,
 } from "./assistantClient";
-<<<<<<< HEAD:frontend/src/voice/VoiceAssistantProvider.tsx
 import {
   actionMatches,
   findTopicFromAction,
-  getCardBackFromAction,
-  getCardFrontFromAction,
   getTopicDescriptionFromAction,
   getTopicTitleFromAction,
-  isCustomVoiceTopic,
-  type VoiceTopic,
 } from "./flashcardVoice";
-// Новые импорты для работы с сервером
 import { fetchUserData, saveCustomTopic, type CustomTopic } from "../data/customTopics";
 import { topics as baseTopics } from "../data/flashcards";
 
-type NavigateOptions = {
-  replace?: boolean;
-  state?: unknown;
+// Вспомогательная функция для определения пути темы
+const getTopicPath = (topic: any, mode: 'study' | 'open') => {
+  return mode === 'study' ? `/study/${topic.id}` : `/topics/${topic.id}`;
 };
-
-type Navigate = (to: string | number, options?: NavigateOptions) => void;
-=======
-import { subscribeCompactNativePanelRecognition } from "./compactNativePanel";
-import { getAllVoiceTopics } from "./flashcardVoice";
-import { loadCustomTopics } from "../data/customTopics";
->>>>>>> df347738be23e3ef152b1d04b42d68ee096a0191:frontend/src/app/voice/VoiceAssistantProvider.tsx
 
 export type AssistantScreenState = Record<string, unknown> & {
   screen?: string;
@@ -77,30 +65,16 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
 const getStringField = (value: unknown, field: string): string => {
-  if (!isRecord(value)) {
-    return "";
-  }
-<<<<<<< HEAD:frontend/src/voice/VoiceAssistantProvider.tsx
-  return isCustomVoiceTopic(topic) ? `/topics/${topic.id}` : `/study/${topic.id}`;
-=======
-
+  if (!isRecord(value)) return "";
   const candidate = value[field];
   return typeof candidate === "string" ? candidate.toLowerCase() : "";
 };
 
 const getTtsState = (event: unknown): string => {
-  if (typeof event === "string") {
-    return event.toLowerCase();
-  }
-
+  if (typeof event === "string") return event.toLowerCase();
   const directState = getStringField(event, "state") || getStringField(event, "status");
-  if (directState) {
-    return directState;
-  }
-
-  if (!isRecord(event)) {
-    return "";
-  }
+  if (directState) return directState;
+  if (!isRecord(event)) return "";
 
   const nestedCandidates = [
     event.payload,
@@ -112,16 +86,11 @@ const getTtsState = (event: unknown): string => {
 
   for (const candidate of nestedCandidates) {
     const nestedState = getStringField(candidate, "state") || getStringField(candidate, "status");
-    if (nestedState) {
-      return nestedState;
-    }
+    if (nestedState) return nestedState;
   }
-
   return "";
->>>>>>> df347738be23e3ef152b1d04b42d68ee096a0191:frontend/src/app/voice/VoiceAssistantProvider.tsx
 };
 
-// Функция сборки состояния теперь принимает актуальный список тем
 const buildAssistantState = (
   screenState: AssistantScreenState,
   customTopics: CustomTopic[]
@@ -136,15 +105,23 @@ const buildAssistantState = (
   })),
 });
 
-export function VoiceAssistantProvider({ children }: { children: React.ReactNode }) {
+// Добавлен тип для пропса navigate
+type NavigateFn = (to: string | number, options?: { replace?: boolean; state?: any }) => void;
+
+export function VoiceAssistantProvider({ 
+  children, 
+  navigate // Теперь получаем navigate из пропсов
+}: { 
+  children: React.ReactNode;
+  navigate: NavigateFn; 
+}) {
+  // const navigate = useNavigate(); <--- ЭТА СТРОКА УДАЛЕНА
   const assistantRef = useRef<VoiceAssistant | null>(null);
   const startListeningRef = useRef<() => boolean>(() => false);
   const speakingTimeoutRef = useRef<number | null>(null);
   const assistantStateRef = useRef<AssistantScreenState>({ screen: "home" });
   const handlersRef = useRef<RegisteredHandler[]>([]);
   const nextHandlerIdRef = useRef(1);
-  
-  // Кэш тем для моментальных синхронных ответов ассистенту
   const customTopicsRef = useRef<CustomTopic[]>([]);
 
   const [mode, setMode] = useState<VoiceAssistantMode>("noop");
@@ -156,7 +133,6 @@ export function VoiceAssistantProvider({ children }: { children: React.ReactNode
   const [recognizedStatus, setRecognizedStatus] = useState("idle");
   const [lastAction, setLastAction] = useState<VoiceAction | null>(null);
 
-  // Функция для фонового обновления кэша тем
   const refreshTopics = useCallback(async () => {
     try {
       const data = await fetchUserData();
@@ -166,7 +142,6 @@ export function VoiceAssistantProvider({ children }: { children: React.ReactNode
     }
   }, []);
 
-  // Обновляем кэш при первом запуске
   useEffect(() => {
     refreshTopics();
   }, [refreshTopics]);
@@ -192,8 +167,6 @@ export function VoiceAssistantProvider({ children }: { children: React.ReactNode
     [sendAssistantAction]
   );
 
-<<<<<<< HEAD:frontend/src/voice/VoiceAssistantProvider.tsx
-  // Теперь эта функция асинхронная
   const handleGlobalAction = useCallback(
     async (action: VoiceAction): Promise<boolean> => {
       if (actionMatches(action, ["go_home", "home", "show_topics", "all_topics"])) {
@@ -209,7 +182,6 @@ export function VoiceAssistantProvider({ children }: { children: React.ReactNode
         return true;
       }
       
-      // Создание новой темы голосом
       if (actionMatches(action, ["create_topic"])) {
         const title = getTopicTitleFromAction(action);
         if (!title) {
@@ -230,106 +202,54 @@ export function VoiceAssistantProvider({ children }: { children: React.ReactNode
         };
         
         await saveCustomTopic(newTopic);
-        await refreshTopics(); // Обновляем кэш для ассистента
-        
+        await refreshTopics();
         navigate(`/topics/${newTopic.id}`);
-        speak(`Тема ${newTopic.title} создана. Можно добавлять карточки.`, "topic_created");
+        speak(`Тема ${newTopic.title} создана.`, "topic_created");
         return true;
       }
       
-      if (actionMatches(action, ["open_topic", "start_topic", "start_study", "practice_topic"])) {
+      if (actionMatches(action, ["open_topic", "start_topic", "start_study"])) {
         const availableTopics = [...customTopicsRef.current, ...baseTopics];
         const topic = await findTopicFromAction(action, availableTopics);
         if (!topic) {
           speak("Не нашла такую тему.", "topic_not_found");
           return true;
         }
-        const mode = actionMatches(action, ["start_topic", "start_study", "practice_topic"])
-          ? "study"
-          : "open";
-        navigate(getTopicPath(topic, mode));
+        const studyMode = actionMatches(action, ["start_topic", "start_study"]) ? "study" : "open";
+        navigate(getTopicPath(topic, studyMode));
         return true;
       }
       
-      // Добавление карточки голосом
-      if (actionMatches(action, ["add_card", "create_card"])) {
-        const availableTopics = [...customTopicsRef.current, ...baseTopics];
-        const topic = await findTopicFromAction(action, availableTopics);
-        const front = getCardFrontFromAction(action);
-        const back = getCardBackFromAction(action);
-        
-        if (!topic || !isCustomVoiceTopic(topic)) {
-          speak("Карточки можно добавлять только в свою тему.", "card_topic_missing");
-          return true;
-        }
-        if (!front || !back) {
-          navigate(`/topics/${topic.id}`);
-          speak("Открой тему и продиктуй вопрос и ответ для новой карточки.", "card_data_missing");
-          return true;
-        }
-        
-        const newCard = { id: Date.now().toString(), front, back };
-        const updatedTopic = { ...topic, cards: [...topic.cards, newCard] };
-        
-        await saveCustomTopic(updatedTopic);
-        await refreshTopics(); // Обновляем кэш
-        
-        navigate(`/topics/${updatedTopic.id}`);
-        speak("Карточка добавлена.", "card_created");
-        return true;
-      }
       return false;
     },
     [navigate, speak, refreshTopics]
   );
 
-  // Сделали обработчик действий асинхронным
-=======
->>>>>>> df347738be23e3ef152b1d04b42d68ee096a0191:frontend/src/app/voice/VoiceAssistantProvider.tsx
   const dispatchAction = useCallback(
     async (action: VoiceAction) => {
       setLastAction(action);
       setError("");
-<<<<<<< HEAD:frontend/src/voice/VoiceAssistantProvider.tsx
-=======
-
-      if (assistantStateRef.current.screen !== "study") {
-        console.warn("Ignoring assistant action outside study screen", action);
-        return;
-      }
-
->>>>>>> df347738be23e3ef152b1d04b42d68ee096a0191:frontend/src/app/voice/VoiceAssistantProvider.tsx
-      const handlers = [...handlersRef.current].sort((a, b) => b.priority - a.priority || b.id - a.id);
       
+      const handlers = [...handlersRef.current].sort((a, b) => b.priority - a.priority || b.id - a.id);
       for (const { handler } of handlers) {
         if (handler(action)) return;
       }
-<<<<<<< HEAD:frontend/src/voice/VoiceAssistantProvider.tsx
       
       if (await handleGlobalAction(action)) return;
-      
       speak("Команда пока не поддерживается.", "unsupported_action");
-=======
-
-      console.warn("Unsupported study assistant action received", action);
->>>>>>> df347738be23e3ef152b1d04b42d68ee096a0191:frontend/src/app/voice/VoiceAssistantProvider.tsx
     },
-    []
+    [handleGlobalAction, speak]
   );
 
-  const setAssistantState = useCallback(
-    (state: AssistantScreenState) => {
-      assistantStateRef.current = state;
-
-      if (state.screen !== "study") {
-        setRecognizedFinal(false);
-        setRecognizedText("");
-        setRecognizedStatus("idle");
-        setIsSpeaking(false);
-      }
-    },
-    []
-  );
+  const setAssistantState = useCallback((state: AssistantScreenState) => {
+    assistantStateRef.current = state;
+    if (state.screen !== "study") {
+      setRecognizedFinal(false);
+      setRecognizedText("");
+      setRecognizedStatus("idle");
+      setIsSpeaking(false);
+    }
+  }, []);
 
   const registerHandler = useCallback((handler: VoiceActionHandler, priority = 0) => {
     const id = nextHandlerIdRef.current;
@@ -348,12 +268,6 @@ export function VoiceAssistantProvider({ children }: { children: React.ReactNode
   }, []);
 
   useEffect(() => {
-    const unsubscribeRecognition = subscribeCompactNativePanelRecognition((state) => {
-      setRecognizedFinal(state.final);
-      setRecognizedText(state.text);
-      setRecognizedStatus(state.status);
-    });
-
     const setup = createVoiceAssistant({
       getState: () => buildAssistantState(assistantStateRef.current, customTopicsRef.current),
       getRecoveryState: () => ({
@@ -361,26 +275,13 @@ export function VoiceAssistantProvider({ children }: { children: React.ReactNode
         topics: [...customTopicsRef.current, ...baseTopics],
       }),
       onAction: (action) => dispatchAction(action),
-      onError: (event) => {
-        const message = formatAssistantError(event);
-        setError(message);
-      },
-      onStart: (_event, initialData) => {
-        console.log("assistant.on(start)", initialData);
-      },
+      onError: (event) => setError(formatAssistantError(event)),
       onTts: (event) => {
         const state = getTtsState(event);
-
-        if (state === "start" || state === "started" || state === "play") {
+        if (state === "start" || state === "play") {
           clearSpeakingTimeout();
           setIsSpeaking(true);
-          speakingTimeoutRef.current = window.setTimeout(() => {
-            speakingTimeoutRef.current = null;
-            setIsSpeaking(false);
-          }, 6000);
-        }
-
-        if (state === "stop" || state === "stopped" || state === "end" || state === "done") {
+        } else if (["stop", "end", "done"].includes(state)) {
           clearSpeakingTimeout();
           setIsSpeaking(false);
         }
@@ -393,82 +294,42 @@ export function VoiceAssistantProvider({ children }: { children: React.ReactNode
     setDisabledReason(setup.disabledReason || "");
 
     return () => {
-      unsubscribeRecognition();
       clearSpeakingTimeout();
       setup.assistant.close?.();
       assistantRef.current = null;
-      startListeningRef.current = () => false;
     };
   }, [clearSpeakingTimeout, dispatchAction]);
 
-  const contextValue = useMemo<VoiceAssistantContextValue>(
-    () => ({
-      mode,
-      error,
-      disabledReason,
-      isSpeaking,
-      recognizedFinal,
-      recognizedText,
-      recognizedStatus,
-      lastAction,
-      setAssistantState,
-      registerHandler,
-      sendAssistantAction,
-      startListening,
-      speak,
-      clearError: () => setError(""),
-    }),
-<<<<<<< HEAD:frontend/src/voice/VoiceAssistantProvider.tsx
-    [disabledReason, error, lastAction, mode, registerHandler, sendAssistantAction, setAssistantState, speak]
-=======
-    [
-      disabledReason,
-      error,
-      isSpeaking,
-      lastAction,
-      mode,
-      recognizedFinal,
-      recognizedText,
-      recognizedStatus,
-      registerHandler,
-      sendAssistantAction,
-      setAssistantState,
-      startListening,
-      speak,
-    ]
->>>>>>> df347738be23e3ef152b1d04b42d68ee096a0191:frontend/src/app/voice/VoiceAssistantProvider.tsx
-  );
+  const contextValue = useMemo(() => ({
+    mode, error, disabledReason, isSpeaking, recognizedFinal,
+    recognizedText, recognizedStatus, lastAction, setAssistantState,
+    registerHandler, sendAssistantAction, startListening, speak,
+    clearError: () => setError(""),
+  }), [mode, error, disabledReason, isSpeaking, recognizedFinal, recognizedText, recognizedStatus, lastAction, setAssistantState, registerHandler, sendAssistantAction, startListening, speak]);
 
   return (
     <VoiceAssistantContext.Provider value={contextValue}>
       {children}
-      {error ? (
-        <div
-          role="alert"
-          className="fixed left-4 right-4 top-4 z-[200] mx-auto max-w-lg rounded-2xl px-5 py-4 text-sm shadow-2xl border animate-in slide-in-from-top-4 bg-card text-foreground border-destructive/20"
-        >
+      {error && (
+        <div className="fixed left-4 right-4 top-4 z-[200] mx-auto max-w-lg rounded-2xl px-5 py-4 text-sm shadow-2xl border bg-card text-foreground border-destructive/20">
           <div className="flex items-center gap-3">
             <div className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
             <span className="font-bold">Ошибка Salute:</span>
             <span className="opacity-90">{error}</span>
           </div>
         </div>
-      ) : null}
+      )}
     </VoiceAssistantContext.Provider>
   );
 }
 
-export const useVoiceAssistant = (): VoiceAssistantContextValue => {
+export const useVoiceAssistant = () => {
   const context = useContext(VoiceAssistantContext);
   if (!context) throw new Error("useVoiceAssistant must be used inside VoiceAssistantProvider");
   return context;
 };
 
-export const useVoiceActionHandler = (
-  handler: VoiceActionHandler,
-  deps: React.DependencyList,
-  priority = 0
-) => {
+export const useVoiceActionHandler = (handler: VoiceActionHandler, deps: React.DependencyList, priority = 0) => {
   const { registerHandler } = useVoiceAssistant();
   useEffect(() => registerHandler(handler, priority), [registerHandler, priority, ...deps]);
 };

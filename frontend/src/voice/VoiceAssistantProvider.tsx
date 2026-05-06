@@ -14,6 +14,7 @@ import {
   type VoiceAssistant,
   type VoiceAssistantMode,
 } from "./assistantClient";
+<<<<<<< HEAD:frontend/src/voice/VoiceAssistantProvider.tsx
 import {
   actionMatches,
   findTopicFromAction,
@@ -34,6 +35,11 @@ type NavigateOptions = {
 };
 
 type Navigate = (to: string | number, options?: NavigateOptions) => void;
+=======
+import { subscribeCompactNativePanelRecognition } from "./compactNativePanel";
+import { getAllVoiceTopics } from "./flashcardVoice";
+import { loadCustomTopics } from "../data/customTopics";
+>>>>>>> df347738be23e3ef152b1d04b42d68ee096a0191:frontend/src/app/voice/VoiceAssistantProvider.tsx
 
 export type AssistantScreenState = Record<string, unknown> & {
   screen?: string;
@@ -52,21 +58,67 @@ type VoiceAssistantContextValue = {
   mode: VoiceAssistantMode;
   error: string;
   disabledReason: string;
+  isSpeaking: boolean;
+  recognizedFinal: boolean;
+  recognizedText: string;
+  recognizedStatus: string;
   lastAction: VoiceAction | null;
   setAssistantState: (state: AssistantScreenState) => void;
   registerHandler: (handler: VoiceActionHandler, priority?: number) => () => void;
   sendAssistantAction: (actionId: string, parameters?: Record<string, unknown>) => void;
+  startListening: () => boolean;
   speak: (text: string, reason?: string) => void;
   clearError: () => void;
 };
 
 const VoiceAssistantContext = createContext<VoiceAssistantContextValue | null>(null);
 
-const getTopicPath = (topic: VoiceTopic, mode: "open" | "study"): string => {
-  if (mode === "study") {
-    return `/study/${topic.id}`;
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const getStringField = (value: unknown, field: string): string => {
+  if (!isRecord(value)) {
+    return "";
   }
+<<<<<<< HEAD:frontend/src/voice/VoiceAssistantProvider.tsx
   return isCustomVoiceTopic(topic) ? `/topics/${topic.id}` : `/study/${topic.id}`;
+=======
+
+  const candidate = value[field];
+  return typeof candidate === "string" ? candidate.toLowerCase() : "";
+};
+
+const getTtsState = (event: unknown): string => {
+  if (typeof event === "string") {
+    return event.toLowerCase();
+  }
+
+  const directState = getStringField(event, "state") || getStringField(event, "status");
+  if (directState) {
+    return directState;
+  }
+
+  if (!isRecord(event)) {
+    return "";
+  }
+
+  const nestedCandidates = [
+    event.payload,
+    event.tts,
+    event.tts_state,
+    event.tts_state_update,
+    event.smart_app_data,
+  ];
+
+  for (const candidate of nestedCandidates) {
+    const nestedState = getStringField(candidate, "state") || getStringField(candidate, "status");
+    if (nestedState) {
+      return nestedState;
+    }
+  }
+
+  return "";
+>>>>>>> df347738be23e3ef152b1d04b42d68ee096a0191:frontend/src/app/voice/VoiceAssistantProvider.tsx
 };
 
 // Функция сборки состояния теперь принимает актуальный список тем
@@ -84,14 +136,10 @@ const buildAssistantState = (
   })),
 });
 
-export function VoiceAssistantProvider({
-  children,
-  navigate,
-}: {
-  children: React.ReactNode;
-  navigate: Navigate;
-}) {
+export function VoiceAssistantProvider({ children }: { children: React.ReactNode }) {
   const assistantRef = useRef<VoiceAssistant | null>(null);
+  const startListeningRef = useRef<() => boolean>(() => false);
+  const speakingTimeoutRef = useRef<number | null>(null);
   const assistantStateRef = useRef<AssistantScreenState>({ screen: "home" });
   const handlersRef = useRef<RegisteredHandler[]>([]);
   const nextHandlerIdRef = useRef(1);
@@ -102,6 +150,10 @@ export function VoiceAssistantProvider({
   const [mode, setMode] = useState<VoiceAssistantMode>("noop");
   const [error, setError] = useState("");
   const [disabledReason, setDisabledReason] = useState("");
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [recognizedFinal, setRecognizedFinal] = useState(false);
+  const [recognizedText, setRecognizedText] = useState("");
+  const [recognizedStatus, setRecognizedStatus] = useState("idle");
   const [lastAction, setLastAction] = useState<VoiceAction | null>(null);
 
   // Функция для фонового обновления кэша тем
@@ -130,6 +182,8 @@ export function VoiceAssistantProvider({
     []
   );
 
+  const startListening = useCallback((): boolean => startListeningRef.current(), []);
+
   const speak = useCallback(
     (text: string, reason = "feedback") => {
       if (!text.trim()) return;
@@ -138,6 +192,7 @@ export function VoiceAssistantProvider({
     [sendAssistantAction]
   );
 
+<<<<<<< HEAD:frontend/src/voice/VoiceAssistantProvider.tsx
   // Теперь эта функция асинхронная
   const handleGlobalAction = useCallback(
     async (action: VoiceAction): Promise<boolean> => {
@@ -229,26 +284,52 @@ export function VoiceAssistantProvider({
   );
 
   // Сделали обработчик действий асинхронным
+=======
+>>>>>>> df347738be23e3ef152b1d04b42d68ee096a0191:frontend/src/app/voice/VoiceAssistantProvider.tsx
   const dispatchAction = useCallback(
     async (action: VoiceAction) => {
       setLastAction(action);
       setError("");
+<<<<<<< HEAD:frontend/src/voice/VoiceAssistantProvider.tsx
+=======
+
+      if (assistantStateRef.current.screen !== "study") {
+        console.warn("Ignoring assistant action outside study screen", action);
+        return;
+      }
+
+>>>>>>> df347738be23e3ef152b1d04b42d68ee096a0191:frontend/src/app/voice/VoiceAssistantProvider.tsx
       const handlers = [...handlersRef.current].sort((a, b) => b.priority - a.priority || b.id - a.id);
       
       for (const { handler } of handlers) {
         if (handler(action)) return;
       }
+<<<<<<< HEAD:frontend/src/voice/VoiceAssistantProvider.tsx
       
       if (await handleGlobalAction(action)) return;
       
       speak("Команда пока не поддерживается.", "unsupported_action");
+=======
+
+      console.warn("Unsupported study assistant action received", action);
+>>>>>>> df347738be23e3ef152b1d04b42d68ee096a0191:frontend/src/app/voice/VoiceAssistantProvider.tsx
     },
-    [handleGlobalAction, speak]
+    []
   );
 
-  const setAssistantState = useCallback((state: AssistantScreenState) => {
-    assistantStateRef.current = state;
-  }, []);
+  const setAssistantState = useCallback(
+    (state: AssistantScreenState) => {
+      assistantStateRef.current = state;
+
+      if (state.screen !== "study") {
+        setRecognizedFinal(false);
+        setRecognizedText("");
+        setRecognizedStatus("idle");
+        setIsSpeaking(false);
+      }
+    },
+    []
+  );
 
   const registerHandler = useCallback((handler: VoiceActionHandler, priority = 0) => {
     const id = nextHandlerIdRef.current;
@@ -259,7 +340,20 @@ export function VoiceAssistantProvider({
     };
   }, []);
 
+  const clearSpeakingTimeout = useCallback(() => {
+    if (speakingTimeoutRef.current !== null) {
+      window.clearTimeout(speakingTimeoutRef.current);
+      speakingTimeoutRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
+    const unsubscribeRecognition = subscribeCompactNativePanelRecognition((state) => {
+      setRecognizedFinal(state.final);
+      setRecognizedText(state.text);
+      setRecognizedStatus(state.status);
+    });
+
     const setup = createVoiceAssistant({
       getState: () => buildAssistantState(assistantStateRef.current, customTopicsRef.current),
       getRecoveryState: () => ({
@@ -274,31 +368,75 @@ export function VoiceAssistantProvider({
       onStart: (_event, initialData) => {
         console.log("assistant.on(start)", initialData);
       },
+      onTts: (event) => {
+        const state = getTtsState(event);
+
+        if (state === "start" || state === "started" || state === "play") {
+          clearSpeakingTimeout();
+          setIsSpeaking(true);
+          speakingTimeoutRef.current = window.setTimeout(() => {
+            speakingTimeoutRef.current = null;
+            setIsSpeaking(false);
+          }, 6000);
+        }
+
+        if (state === "stop" || state === "stopped" || state === "end" || state === "done") {
+          clearSpeakingTimeout();
+          setIsSpeaking(false);
+        }
+      },
     });
 
     assistantRef.current = setup.assistant;
+    startListeningRef.current = setup.startListening;
     setMode(setup.mode);
     setDisabledReason(setup.disabledReason || "");
 
     return () => {
+      unsubscribeRecognition();
+      clearSpeakingTimeout();
       setup.assistant.close?.();
       assistantRef.current = null;
+      startListeningRef.current = () => false;
     };
-  }, [dispatchAction]);
+  }, [clearSpeakingTimeout, dispatchAction]);
 
   const contextValue = useMemo<VoiceAssistantContextValue>(
     () => ({
       mode,
       error,
       disabledReason,
+      isSpeaking,
+      recognizedFinal,
+      recognizedText,
+      recognizedStatus,
       lastAction,
       setAssistantState,
       registerHandler,
       sendAssistantAction,
+      startListening,
       speak,
       clearError: () => setError(""),
     }),
+<<<<<<< HEAD:frontend/src/voice/VoiceAssistantProvider.tsx
     [disabledReason, error, lastAction, mode, registerHandler, sendAssistantAction, setAssistantState, speak]
+=======
+    [
+      disabledReason,
+      error,
+      isSpeaking,
+      lastAction,
+      mode,
+      recognizedFinal,
+      recognizedText,
+      recognizedStatus,
+      registerHandler,
+      sendAssistantAction,
+      setAssistantState,
+      startListening,
+      speak,
+    ]
+>>>>>>> df347738be23e3ef152b1d04b42d68ee096a0191:frontend/src/app/voice/VoiceAssistantProvider.tsx
   );
 
   return (

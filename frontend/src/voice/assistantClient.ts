@@ -1,4 +1,8 @@
 import { createAssistant, createSmartappDebugger } from "@salutejs/client";
+<<<<<<< HEAD:frontend/src/voice/assistantClient.ts
+=======
+import { renderCompactNativePanel, startCompactNativePanelListening } from "./compactNativePanel";
+>>>>>>> df347738be23e3ef152b1d04b42d68ee096a0191:frontend/src/app/voice/assistantClient.ts
 
 export type VoiceAction = {
   type: string;
@@ -22,6 +26,7 @@ type CreateVoiceAssistantOptions = {
   onAction: (action: VoiceAction, event: unknown) => void;
   onError: (error: unknown) => void;
   onStart?: (event: unknown, initialData: unknown) => void;
+  onTts?: (event: unknown) => void;
 };
 
 export type VoiceAssistantMode = "debugger" | "canvas" | "noop";
@@ -30,6 +35,7 @@ export type VoiceAssistantSetup = {
   assistant: VoiceAssistant;
   mode: VoiceAssistantMode;
   disabledReason?: string;
+  startListening: () => boolean;
 };
 
 const createNoopAssistant = (): VoiceAssistant => ({
@@ -126,6 +132,7 @@ export const createVoiceAssistant = ({
   onAction,
   onError,
   onStart,
+  onTts,
 }: CreateVoiceAssistantOptions): VoiceAssistantSetup => {
   const token = readEnv("VITE_SALUTE_TOKEN") || readEnv("REACT_APP_TOKEN");
   const smartapp = readEnv("VITE_SALUTE_SMARTAPP") || readEnv("REACT_APP_SMARTAPP");
@@ -145,8 +152,14 @@ export const createVoiceAssistant = ({
         getRecoveryState,
         // Скрываем панель, возвращая null в функции рендеринга
         nativePanel: {
+<<<<<<< HEAD:frontend/src/voice/assistantClient.ts
           render: () => null, 
           defaultText: "",
+=======
+          render: renderCompactNativePanel,
+          hideNativePanel: true,
+          defaultText: "Скажи команду или введи ее текстом",
+>>>>>>> df347738be23e3ef152b1d04b42d68ee096a0191:frontend/src/app/voice/assistantClient.ts
           screenshotMode: false,
           tabIndex: -1,
         },
@@ -191,6 +204,16 @@ export const createVoiceAssistant = ({
   });
 
   assistant.on("error", onError);
+<<<<<<< HEAD:frontend/src/voice/assistantClient.ts
 
   return { assistant, mode, disabledReason };
 };
+=======
+  assistant.on("tts", (event) => {
+    console.log("assistant.on(tts)", event);
+    onTts?.(event);
+  });
+
+  return { assistant, mode, disabledReason, startListening: startCompactNativePanelListening };
+};
+>>>>>>> df347738be23e3ef152b1d04b42d68ee096a0191:frontend/src/app/voice/assistantClient.ts

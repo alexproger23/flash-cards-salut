@@ -16,13 +16,31 @@ type CompactNativePanelProps = {
   onSubscribeHypotesis?: (handler: (text: string, last?: boolean) => void) => (() => void) | void;
 };
 
+type RecognitionState = {
+  text: string;
+  final: boolean;
+  status: string;
+};
+
 let root: HTMLDivElement | null = null;
 let unsubscribeListen: (() => void) | void;
 let unsubscribeHypotesis: (() => void) | void;
 let listenStatus = "idle";
 let hypothesis = "";
+let currentListenHandler: (() => void) | undefined;
+const recognitionSubscribers = new Set<(state: RecognitionState) => void>();
 
-// ИСПОЛЬЗУЕМ ПЕРЕМЕННЫЕ ТЕМЫ
+const getRecognitionState = (final = false): RecognitionState => ({
+  text: hypothesis,
+  final,
+  status: listenStatus,
+});
+
+const notifyRecognitionSubscribers = (final = false) => {
+  const state = getRecognitionState(final);
+  recognitionSubscribers.forEach((subscriber) => subscriber(state));
+};
+
 const panelStyles = `
   .FlashcardsSalutePanel {
     position: fixed;
@@ -73,7 +91,7 @@ const panelStyles = `
   }
 
   .FlashcardsSalutePanel__mic[data-active="true"] {
-    background: #ef4444; /* Цвет записи */
+    background: #ef4444;
     animation: pulse-red 1.5s infinite;
   }
 
@@ -234,28 +252,59 @@ const render = (props: CompactNativePanelProps) => {
 };
 
 export const renderCompactNativePanel = (props: CompactNativePanelProps) => {
-  if (props.hideNativePanel) {
-    root?.remove();
-    root = null;
-    unsubscribeListen?.();
-    unsubscribeHypotesis?.();
-    unsubscribeListen = undefined;
-    unsubscribeHypotesis = undefined;
-    return;
-  }
+  currentListenHandler = props.onListen;
 
   unsubscribeListen?.();
   unsubscribeHypotesis?.();
 
   unsubscribeListen = props.onSubscribeListenStatus?.((status) => {
     listenStatus = status;
-    render(props);
+
+    if (status === "listen") {
+      hypothesis = "";
+    }
+
+    notifyRecognitionSubscribers(false);
+
+    if (!props.hideNativePanel) {
+      render(props);
+    }
   });
 
   unsubscribeHypotesis = props.onSubscribeHypotesis?.((text, last) => {
-    hypothesis = last ? "" : text;
-    render(props);
+    hypothesis = text.trim();
+    notifyRecognitionSubscribers(Boolean(last));
+
+    if (!props.hideNativePanel) {
+      render(props);
+    }
   });
 
+  if (props.hideNativePanel) {
+    root?.remove();
+    root = null;
+    return;
+  }
+
   render(props);
+};
+
+export const startCompactNativePanelListening = (): boolean => {
+  if (!currentListenHandler) {
+    return false;
+  }
+
+  currentListenHandler();
+  return true;
+};
+
+export const subscribeCompactNativePanelRecognition = (
+  subscriber: (state: RecognitionState) => void
+): (() => void) => {
+  subscriber(getRecognitionState());
+  recognitionSubscribers.add(subscriber);
+
+  return () => {
+    recognitionSubscribers.delete(subscriber);
+  };
 };

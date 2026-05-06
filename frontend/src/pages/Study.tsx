@@ -2,16 +2,16 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router";
 import { ChevronLeft, X, Check, Info, Loader2 } from "lucide-react";
 import { getTopicById, saveSessionResult } from "../data/flashcards";
-// Импортируем нашу новую асинхронную функцию и тип
 import { fetchUserData, type CustomTopic } from "../data/customTopics";
 import { FlashCard } from "./components/FlashCard";
 import { TopicIcon } from "./components/TopicIcon";
+
+import { motion, AnimatePresence } from "framer-motion";
 
 export function Study() {
   const { topicId } = useParams<{ topicId: string }>();
   const navigate = useNavigate();
 
-  // Добавляем состояния для темы, статуса загрузки и флага пользовательской темы
   const [topic, setTopic] = useState<any>(null);
   const [isCustom, setIsCustom] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -22,7 +22,9 @@ export function Study() {
   const [unknown, setUnknown] = useState(0);
   const [cardKey, setCardKey] = useState(0);
 
-  // Асинхронная загрузка темы при старте
+  // 👉 направление свайпа
+  const [direction, setDirection] = useState<"left" | "right" | null>(null);
+
   useEffect(() => {
     const loadTopic = async () => {
       if (!topicId) {
@@ -32,7 +34,15 @@ export function Study() {
 
       setIsLoading(true);
       try {
-        // Сначала ищем среди пользовательских (на сервере)
+        const builtIn = getTopicById(topicId);
+        
+        if (builtIn) {
+          setTopic(builtIn);
+          setIsCustom(false);
+          setIsLoading(false);
+          return;
+        }
+
         const data = await fetchUserData();
         const customTopic = data.customTopics?.find((t: CustomTopic) => t.id === topicId);
 
@@ -40,15 +50,7 @@ export function Study() {
           setTopic(customTopic);
           setIsCustom(true);
         } else {
-          // Если не нашли на сервере, проверяем встроенные (базовые) темы
-          const builtIn = getTopicById(topicId);
-          if (builtIn) {
-            setTopic(builtIn);
-            setIsCustom(false);
-          } else {
-            navigate("/"); // Тема не найдена вообще
-            return;
-          }
+          navigate("/");
         }
       } catch (error) {
         console.error("Ошибка при загрузке темы:", error);
@@ -61,7 +63,6 @@ export function Study() {
     loadTopic();
   }, [topicId, navigate]);
 
-  // Защита от пустых колод (проверяем только когда загрузка завершена)
   useEffect(() => {
     if (!isLoading && topic && topic.cards.length === 0) {
       navigate(isCustom ? `/topics/${topicId}` : "/");
@@ -73,32 +74,62 @@ export function Study() {
 
   const handleAnswer = useCallback((didKnow: boolean) => {
     if (!topic || !card || total === 0) return;
-    const newKnown = didKnow ? known + 1 : known;
-    const newUnknown = didKnow ? unknown : unknown + 1;
 
-    if (currentIndex + 1 >= total) {
-      saveSessionResult({ topicId: topic.id, known: newKnown, unknown: newUnknown, date: new Date().toISOString() });
-      navigate(`/results/${topic.id}`, { state: { known: newKnown, unknown: newUnknown, total, isCustom } });
-    } else {
-      if (didKnow) setKnown(newKnown);
-      else setUnknown(newUnknown);
-      setCurrentIndex((i) => i + 1);
-      setIsFlipped(false);
-      setCardKey((k) => k + 1);
-    }
+    setDirection(didKnow ? "right" : "left");
+
+    setTimeout(() => {
+      const newKnown = didKnow ? known + 1 : known;
+      const newUnknown = didKnow ? unknown : unknown + 1;
+
+      if (currentIndex + 1 >= total) {
+        saveSessionResult({
+          topicId: topic.id,
+          known: newKnown,
+          unknown: newUnknown,
+          date: new Date().toISOString()
+        });
+
+        navigate(`/results/${topic.id}`, {
+          state: { known: newKnown, unknown: newUnknown, total, isCustom }
+        });
+      } else {
+        if (didKnow) setKnown(newKnown);
+        else setUnknown(newUnknown);
+
+        setCurrentIndex((i) => i + 1);
+        setIsFlipped(false);
+        setCardKey((k) => k + 1);
+
+        setDirection(null);
+      }
+    }, 300);
   }, [card, currentIndex, isCustom, known, navigate, topic, total, unknown]);
 
-  // Экран загрузки
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") {
+        handleAnswer(false); // Не знаю
+      }
+      if (e.key === "ArrowRight") {
+        handleAnswer(true); // Знаю
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleAnswer]);
+
   if (isLoading) {
     return (
       <div className="min-h-[100dvh] bg-background flex flex-col items-center justify-center">
         <Loader2 className="animate-spin text-primary mb-4" size={40} />
-        <p className="text-muted-foreground font-medium animate-pulse">Загружаем карточки...</p>
+        <p className="text-muted-foreground font-medium animate-pulse">
+          Загружаем карточки...
+        </p>
       </div>
     );
   }
 
-  // Заглушка, если после загрузки тема так и не нашлась
   if (!topic || !card || total === 0) return null;
 
   const progress = (currentIndex / total) * 100;
@@ -142,17 +173,31 @@ export function Study() {
           />
         </div>
 
-        {/* CARD CONTAINER */}
+        {/* CARD */}
         <div className="relative w-full h-[420px] perspective-1000 my-2">
-          <FlashCard
-            key={cardKey}
-            front={card.front}
-            back={card.back}
-            frontLabel={topic.frontLabel}
-            backLabel={topic.backLabel}
-            flipped={isFlipped}
-            onFlip={setIsFlipped}
-          />
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={cardKey}
+              className="w-full h-full"
+              initial={{ x: 0, opacity: 1 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{
+                x: direction === "right" ? 300 : -300,
+                opacity: 0,
+                rotate: direction === "right" ? 10 : -10
+              }}
+              transition={{ duration: 0.3 }}
+            >
+              <FlashCard
+                front={card.front}
+                back={card.back}
+                frontLabel={topic.frontLabel}
+                backLabel={topic.backLabel}
+                flipped={isFlipped}
+                onFlip={setIsFlipped}
+              />
+            </motion.div>
+          </AnimatePresence>
         </div>
 
         {/* Controls */}
@@ -164,7 +209,7 @@ export function Study() {
              </div>
           </div>
 
-          <div className={`flex gap-4 w-full transition-all duration-500 ${isFlipped ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0 pointer-events-none"}`}>
+          <div className="flex gap-4 w-full transition-all duration-300 translate-y-0 opacity-100">
             <button 
               className="flex-1 flex flex-col items-center gap-1 bg-card border-2 border-destructive/20 hover:bg-destructive/5 rounded-[2rem] py-5 transition-all active:scale-95" 
               onClick={() => handleAnswer(false)}

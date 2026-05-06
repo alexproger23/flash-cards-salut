@@ -7,7 +7,7 @@ import {
   Target, Dna, Ruler, Languages, Theater, Ghost, Rocket
 } from "lucide-react";
 import { toast } from "sonner";
-// Импортируем наши новые функции для работы с сервером
+
 import { fetchUserData, saveCustomTopic, type CustomTopic } from "../data/customTopics";
 import { useVoiceActionHandler, useVoiceAssistant } from "../voice/VoiceAssistantProvider";
 import {
@@ -18,7 +18,7 @@ import {
 } from "../voice/flashcardVoice";
 import { TopicIcon } from "./components/TopicIcon";
 
-// Список современных иконoк
+
 const ICON_OPTIONS = [
   { id: "BookText", Icon: BookText },
   { id: "Brain", Icon: Brain },

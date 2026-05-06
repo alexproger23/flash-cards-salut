@@ -5,44 +5,73 @@ export interface CustomTopic {
   cards: { front: string; back: string }[];
 }
 
-// Достаем токен из памяти, чтобы показать его серверу
 const getHeaders = () => {
+  // ПРОВЕРЬ: точно ли ключ называется "auth_token"?
   const token = localStorage.getItem("auth_token");
   return {
     "Content-Type": "application/json",
-    "Authorization": `Bearer ${token}`
+    ...(token ? { "Authorization": `Bearer ${token}` } : {})
   };
 };
 
 // Загрузка данных с сервера
 export const fetchUserData = async () => {
-  const res = await fetch("http://localhost:5000/api/userdata", { headers: getHeaders() });
-  if (!res.ok) throw new Error("Ошибка загрузки данных");
-  return await res.json(); 
+  try {
+    const res = await fetch("http://localhost:5000/api/userdata", { 
+      headers: getHeaders(),
+      // Добавим небольшой таймаут, чтобы fetch не висел вечно
+      signal: AbortSignal.timeout(5000) 
+    });
+
+    if (!res.ok) {
+        console.warn(`Сервер ответил статусом ${res.status}`);
+        return { customTopics: [], hiddenIds: [] };
+    }
+
+    return await res.json();
+  } catch (err) {
+    // Вместо throw new Error, мы просто логируем и возвращаем пустую структуру
+    console.error("Ошибка обновления кэша тем для Салют:", err);
+    return { customTopics: [], hiddenIds: [] }; 
+  }
 };
 
-// Сохранение темы на сервере
+// Сохранение темы
 export const saveCustomTopic = async (topic: CustomTopic) => {
-  await fetch("http://localhost:5000/api/topics", {
-    method: "POST",
-    headers: getHeaders(),
-    body: JSON.stringify(topic)
-  });
+  try {
+    const res = await fetch("http://localhost:5000/api/topics", {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify(topic)
+    });
+    if (!res.ok) throw new Error("Не удалось сохранить тему");
+  } catch (err) {
+    console.error(err);
+    throw err; // Тут можно прокинуть ошибку, чтобы показать уведомление пользователю
+  }
 };
 
-// Удаление темы на сервере
+// Удаление темы
 export const deleteCustomTopic = async (topicId: string) => {
-  await fetch(`http://localhost:5000/api/topics/${topicId}`, {
-    method: "DELETE",
-    headers: getHeaders()
-  });
+  try {
+    await fetch(`http://localhost:5000/api/topics/${topicId}`, {
+      method: "DELETE",
+      headers: getHeaders()
+    });
+  } catch (err) {
+    console.error("Ошибка при удалении:", err);
+  }
 };
 
-// Скрытие стандартных тем (сохраняем ID скрытой темы в БД)
+// Скрытие тем
 export const hideDefaultTopic = async (topicId: string) => {
-  await fetch("http://localhost:5000/api/topics/hide-default", {
-    method: "POST",
-    headers: getHeaders(),
-    body: JSON.stringify({ topicId })
-  });
+  try {
+    await fetch("http://localhost:5000/api/topics/hide-default", {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({ topicId })
+    });
+  } catch (err) {
+    console.error("Ошибка при скрытии темы:", err);
+  }
 };

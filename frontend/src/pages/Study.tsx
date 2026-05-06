@@ -1,198 +1,211 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useParams } from "react-router";
 import { ChevronLeft, X, Check, Info, Loader2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+
+// Твои импорты
 import { getTopicById, saveSessionResult } from "../data/flashcards";
 import { fetchUserData, type CustomTopic } from "../data/customTopics";
 import { FlashCard } from "./components/FlashCard";
 import { TopicIcon } from "./components/TopicIcon";
-
-import { motion, AnimatePresence } from "framer-motion";
+import { useVoiceActionHandler, useVoiceAssistant } from "../voice/VoiceAssistantProvider";
 
 export function Study() {
   const { topicId } = useParams<{ topicId: string }>();
   const navigate = useNavigate();
+  
+  // Достаем методы ассистента
+  const { setAssistantState, startListening, sendAssistantAction } = useVoiceAssistant();
 
+  // Состояния карточек
   const [topic, setTopic] = useState<any>(null);
   const [isCustom, setIsCustom] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [known, setKnown] = useState(0);
   const [unknown, setUnknown] = useState(0);
+  
+  // Состояния для анимации
   const [cardKey, setCardKey] = useState(0);
-
-  // 👉 направление свайпа
   const [direction, setDirection] = useState<"left" | "right" | null>(null);
 
+  // 1. ЗАГРУЗКА ТЕМЫ
   useEffect(() => {
     const loadTopic = async () => {
-      if (!topicId) {
-        navigate("/");
-        return;
-      }
-
+      if (!topicId) return navigate("/");
       setIsLoading(true);
+      
       try {
         const builtIn = getTopicById(topicId);
-        
-        if (builtIn) {
-          setTopic(builtIn);
-          setIsCustom(false);
-          setIsLoading(false);
-          return;
+        let currentTopic = builtIn;
+
+        if (!builtIn) {
+          const data = await fetchUserData();
+          currentTopic = data.customTopics?.find((t: CustomTopic) => t.id === topicId);
+          setIsCustom(true);
         }
 
-        const data = await fetchUserData();
-        const customTopic = data.customTopics?.find((t: CustomTopic) => t.id === topicId);
-
-        if (customTopic) {
-          setTopic(customTopic);
-          setIsCustom(true);
+        if (currentTopic) {
+          setTopic(currentTopic);
+          // Синхронизируем состояние с облаком Салюта
+          setAssistantState({ screen: "study" });
         } else {
           navigate("/");
         }
-      } catch (error) {
-        console.error("Ошибка при загрузке темы:", error);
+      } catch (e) {
         navigate("/");
       } finally {
         setIsLoading(false);
       }
     };
-
     loadTopic();
-  }, [topicId, navigate]);
+  }, [topicId, navigate, setAssistantState]);
 
-  useEffect(() => {
-    if (!isLoading && topic && topic.cards.length === 0) {
-      navigate(isCustom ? `/topics/${topicId}` : "/");
-    }
-  }, [isLoading, topic, navigate, isCustom, topicId]);
-
-  const total = topic?.cards.length ?? 0;
-  const card = topic && total > 0 ? topic.cards[currentIndex] : undefined;
-
+  // 2. ЛОГИКА ОТВЕТА (Обернута в Ref для доступа из голоса)
   const handleAnswer = useCallback((didKnow: boolean) => {
-    if (!topic || !card || total === 0) return;
+    if (!topic) return;
 
     setDirection(didKnow ? "right" : "left");
 
     setTimeout(() => {
-      const newKnown = didKnow ? known + 1 : known;
-      const newUnknown = didKnow ? unknown : unknown + 1;
+      const isLast = currentIndex + 1 >= topic.cards.length;
+      const finalKnown = didKnow ? known + 1 : known;
+      const finalUnknown = didKnow ? unknown : unknown + 1;
 
-      if (currentIndex + 1 >= total) {
+      if (isLast) {
         saveSessionResult({
           topicId: topic.id,
-          known: newKnown,
-          unknown: newUnknown,
+          known: finalKnown,
+          unknown: finalUnknown,
           date: new Date().toISOString()
         });
-
         navigate(`/results/${topic.id}`, {
-          state: { known: newKnown, unknown: newUnknown, total, isCustom }
+          state: { known: finalKnown, unknown: finalUnknown, total: topic.cards.length, isCustom }
         });
       } else {
-        if (didKnow) setKnown(newKnown);
-        else setUnknown(newUnknown);
-
-        setCurrentIndex((i) => i + 1);
+        if (didKnow) setKnown(prev => prev + 1);
+        else setUnknown(prev => prev + 1);
+        
+        setCurrentIndex(prev => prev + 1);
         setIsFlipped(false);
-        setCardKey((k) => k + 1);
-
+        setCardKey(prev => prev + 1);
         setDirection(null);
       }
     }, 300);
-  }, [card, currentIndex, isCustom, known, navigate, topic, total, unknown]);
+  }, [currentIndex, topic, known, unknown, navigate, isCustom]);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft") {
-        handleAnswer(false); // Не знаю
-      }
-      if (e.key === "ArrowRight") {
-        handleAnswer(true); // Знаю
-      }
-    };
+  const handleAnswerRef = useRef(handleAnswer);
+  useEffect(() => { handleAnswerRef.current = handleAnswer; }, [handleAnswer]);
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleAnswer]);
+  // 3. ГОЛОСОВОЙ ОБРАБОТЧИК
+  useVoiceActionHandler(useCallback((action: any) => {
+    console.log(">>> SIGNAL IN STUDY:", action);
+
+    const phrase = (action.answer || "").toLowerCase();
+    const type = action.type || "";
+
+    // Игнорируем технические фразы запуска
+    if (phrase.includes("запусти")) return false;
+
+    // Переворот (по типу экшена или по любому тексту)
+    if (type === "check_answer" || type === "flip_card" || phrase.length > 0) {
+      setIsFlipped(true);
+      return true;
+    }
+
+    // Ответы
+    if (type === "know" || type === "next") {
+      handleAnswerRef.current(true);
+      return true;
+    }
+
+    if (type === "dont_know") {
+      handleAnswerRef.current(false);
+      return true;
+    }
+
+    return false;
+  }, [setIsFlipped]), []);
+
+  // 4. МЕТОД ДЛЯ АКТИВАЦИИ МИКРОФОНА
+  const activateVoice = () => {
+    const micStarted = startListening();
+    console.log("Mic Status:", micStarted);
+    
+    // Пингуем сценарий, чтобы он начал слушать (expect_response)
+    sendAssistantAction("run_recognition", { expect_response: true });
+  };
 
   if (isLoading) {
     return (
-      <div className="min-h-[100dvh] bg-background flex flex-col items-center justify-center">
-        <Loader2 className="animate-spin text-primary mb-4" size={40} />
-        <p className="text-muted-foreground font-medium animate-pulse">
-          Загружаем карточки...
-        </p>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="animate-spin text-primary" size={32} />
       </div>
     );
   }
 
-  if (!topic || !card || total === 0) return null;
-
-  const progress = (currentIndex / total) * 100;
+  const card = topic?.cards[currentIndex];
+  if (!card) return null;
 
   return (
-    <div className="min-h-[100dvh] bg-background flex flex-col items-center px-4 py-6 md:py-10">
+    <div 
+      className="min-h-[100dvh] bg-background flex flex-col items-center px-4 py-6 overflow-hidden select-none"
+      onClick={activateVoice} // Клик по экрану «будит» Салют
+    >
       <div className="w-full max-w-md flex flex-col h-full gap-6">
         
         {/* Header */}
-        <header className="flex justify-between items-center px-2">
+        <header className="flex justify-between items-center h-10 px-2">
           <button 
-            className="flex items-center gap-1 text-muted-foreground hover:text-foreground font-bold text-sm transition-colors" 
-            onClick={() => navigate(isCustom ? `/topics/${topicId}` : "/")}
+            onClick={(e) => { e.stopPropagation(); navigate("/"); }}
+            className="flex items-center gap-1 text-muted-foreground font-bold text-xs"
           >
-            <ChevronLeft size={20} />
-            Выход
+            <ChevronLeft size={18} /> Назад
           </button>
           
-          <div className="flex flex-col items-center max-w-[180px]">
-            <div className="flex items-center gap-2 mb-0.5">
-              <div className="text-primary flex-shrink-0">
-                <TopicIcon name={topic.emoji || topic.icon} size={16} />
-              </div>
-              <span className="font-black text-sm tracking-tight truncate">
-                {topic.title}
-              </span>
+          <div className="text-center">
+            <div className="flex items-center justify-center gap-2 mb-0.5">
+              <TopicIcon name={topic.emoji || topic.icon} size={14} />
+              <span className="font-black text-sm truncate max-w-[120px]">{topic.title}</span>
             </div>
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-              {currentIndex + 1} / {total}
-            </span>
+            <p className="text-[10px] font-bold text-muted-foreground uppercase">
+              {currentIndex + 1} из {topic.cards.length}
+            </p>
           </div>
-          
-          <div className="w-10" />
+          <div className="w-16" /> 
         </header>
 
         {/* Progress Bar */}
-        <div className="h-1.5 bg-muted rounded-full overflow-hidden mx-2 shadow-inner">
-          <div 
-            className="h-full bg-primary transition-all duration-500 ease-out" 
-            style={{ width: `${progress}%` }} 
+        <div className="h-1 bg-muted rounded-full mx-2 overflow-hidden">
+          <motion.div 
+            className="h-full bg-primary"
+            initial={{ width: 0 }}
+            animate={{ width: `${(currentIndex / topic.cards.length) * 100}%` }}
           />
         </div>
 
-        {/* CARD */}
-        <div className="relative w-full h-[420px] perspective-1000 my-2">
+        {/* Card Canvas */}
+        <div 
+          className="relative w-full h-[400px] perspective-1000 my-auto"
+          onClick={(e) => { e.stopPropagation(); setIsFlipped(!isFlipped); }}
+        >
           <AnimatePresence mode="wait">
             <motion.div
               key={cardKey}
               className="w-full h-full"
-              initial={{ x: 0, opacity: 1 }}
+              initial={{ x: 160, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
-              exit={{
-                x: direction === "right" ? 300 : -300,
+              exit={{ 
+                x: direction === "right" ? 500 : -500, 
                 opacity: 0,
-                rotate: direction === "right" ? 10 : -10
+                rotate: direction === "right" ? 15 : -15
               }}
-              transition={{ duration: 0.3 }}
+              transition={{ type: "spring", stiffness: 260, damping: 25 }}
             >
               <FlashCard
                 front={card.front}
                 back={card.back}
-                frontLabel={topic.frontLabel}
-                backLabel={topic.backLabel}
                 flipped={isFlipped}
                 onFlip={setIsFlipped}
               />
@@ -200,27 +213,27 @@ export function Study() {
           </AnimatePresence>
         </div>
 
-        {/* Controls */}
-        <div className="flex flex-col gap-6 mt-auto pb-4">
-          <div className={`flex justify-center transition-opacity duration-300 ${isFlipped ? "opacity-0" : "opacity-100"}`}>
-             <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-muted/50 text-muted-foreground text-[10px] font-bold uppercase tracking-widest">
+        {/* Action Buttons */}
+        <div className="mt-auto space-y-6 pb-4">
+          <div className={`text-center transition-opacity ${isFlipped ? "opacity-0" : "opacity-100"}`}>
+             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-muted/30 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
                 <Info size={12} />
-                Нажми на карточку
+                Нажми на экран или скажи «Переверни»
              </div>
           </div>
 
-          <div className="flex gap-4 w-full transition-all duration-300 translate-y-0 opacity-100">
+          <div className="flex gap-4">
             <button 
-              className="flex-1 flex flex-col items-center gap-1 bg-card border-2 border-destructive/20 hover:bg-destructive/5 rounded-[2rem] py-5 transition-all active:scale-95" 
-              onClick={() => handleAnswer(false)}
+              onClick={(e) => { e.stopPropagation(); handleAnswer(false); }}
+              className="flex-1 flex flex-col items-center gap-1 bg-card border-2 border-destructive/10 py-5 rounded-[2.5rem] active:scale-95 transition-all"
             >
               <X size={28} className="text-destructive" strokeWidth={3} />
-              <span className="text-[10px] font-black uppercase text-destructive tracking-widest">Не знаю</span>
+              <span className="text-[10px] font-black text-destructive uppercase tracking-widest">Не знаю</span>
             </button>
 
             <button 
-              className="flex-1 flex flex-col items-center gap-1 bg-primary text-primary-foreground rounded-[2rem] py-5 transition-all active:scale-95 shadow-xl shadow-primary/25 hover:brightness-110" 
-              onClick={() => handleAnswer(true)}
+              onClick={(e) => { e.stopPropagation(); handleAnswer(true); }}
+              className="flex-1 flex flex-col items-center gap-1 bg-primary text-primary-foreground py-5 rounded-[2.5rem] shadow-xl shadow-primary/20 active:scale-95 transition-all"
             >
               <Check size={28} strokeWidth={3} />
               <span className="text-[10px] font-black uppercase tracking-widest">Знаю</span>

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router";
 import { ArrowLeft, Plus, Trash2, Type, MessageSquare, Lock, Settings } from "lucide-react";
-// Заменили старые функции на новые для работы с бэкендом
 import { fetchUserData, saveCustomTopic, type CustomTopic } from "../data/customTopics";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
@@ -15,7 +14,7 @@ export function TopicManager() {
   const [topic, setTopic] = useState<CustomTopic | null>(null);
   const [newCard, setNewCard] = useState({ front: "", back: "" });
 
-  // Загружаем данные с бэкенда при открытии страницы
+
   useEffect(() => {
     const loadTopic = async () => {
       try {

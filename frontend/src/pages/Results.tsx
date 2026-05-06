@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import { useNavigate, useLocation, useParams } from "react-router";
 import { RotateCcw, Home, LayoutList, Trophy, Star, CheckCircle2, Loader2 } from "lucide-react";
 import { getTopicById } from "../data/flashcards";
-// Импортируем асинхронный метод
 import { fetchUserData, type CustomTopic } from "../data/customTopics";
 import { useVoiceActionHandler, useVoiceAssistant } from "../voice/VoiceAssistantProvider";
 import { actionMatches } from "../voice/flashcardVoice";
@@ -23,12 +22,10 @@ export function Results() {
 
   const state = location.state as LocationState | null;
 
-  // Добавляем состояния для загрузки темы
   const [topic, setTopic] = useState<any>(null);
   const [isCustom, setIsCustom] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Асинхронная загрузка темы
   useEffect(() => {
     const loadTopic = async () => {
       if (!topicId || !state) {
@@ -50,12 +47,12 @@ export function Results() {
             setTopic(builtIn);
             setIsCustom(false);
           } else {
-            navigate("/"); // Тема не найдена
+            navigate("/");
             return;
           }
         }
       } catch (error) {
-        console.error("Ошибка при загрузке темы результатов:", error);
+        console.error("Ошибка при загрузки темы результатов:", error);
         navigate("/");
       } finally {
         setIsLoading(false);
@@ -65,7 +62,6 @@ export function Results() {
     loadTopic();
   }, [topicId, navigate, state]);
 
-  // Обновляем состояние ассистента, когда тема загружена
   useEffect(() => {
     if (!state || !topic) return;
 
@@ -81,7 +77,6 @@ export function Results() {
     });
   }, [isCustom, setAssistantState, state, topic]);
 
-  // Голосовые команды
   useVoiceActionHandler(
     (action) => {
       if (!topic) return false;
@@ -99,7 +94,6 @@ export function Results() {
     20
   );
 
-  // Экран загрузки
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center">
@@ -109,13 +103,15 @@ export function Results() {
     );
   }
 
-  // Если вдруг после загрузки темы нет или нет стейта
   if (!state || !topic) {
     return null;
   }
 
-  const { known, unknown, total } = state;
-  const percentage = Math.round((known / total) * 100);
+  const { known, unknown } = state;
+  
+
+  const totalAnswered = known + unknown;
+  const percentage = totalAnswered > 0 ? Math.round((known / totalAnswered) * 100) : 0;
 
   const getMessage = () => {
     if (percentage === 100) return { text: "Идеальный результат!", icon: <Trophy className="text-yellow-500" size={54} /> };
@@ -130,7 +126,6 @@ export function Results() {
     <div className="min-h-screen flex items-center justify-center px-4 py-12 animate-in fade-in zoom-in-95 duration-500">
       <div className="w-full max-w-sm bg-card border border-border rounded-[3rem] p-10 flex flex-col items-center text-center shadow-2xl backdrop-blur-xl relative overflow-hidden">
         
-        {/* Декоративный фон для иконки результата */}
         <div className="mb-8 relative">
           <div className="absolute inset-0 bg-primary/10 blur-3xl rounded-full scale-150 animate-pulse" />
           <div className="relative animate-bounce duration-[3000ms]">
@@ -142,7 +137,6 @@ export function Results() {
           {text}
         </h1>
         
-        {/* Бейдж темы с иконкой */}
         <div className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-muted/50 text-muted-foreground text-[10px] font-black uppercase tracking-widest mb-10 border border-border/50">
           <div className="text-primary">
             <TopicIcon name={topic.emoji || topic.icon} size={14} />
@@ -150,7 +144,6 @@ export function Results() {
           <span className="truncate max-w-[150px]">{topic.title}</span>
         </div>
 
-        {/* Кольцо прогресса */}
         <div className="relative flex items-center justify-center mb-12 group">
           <svg className="w-36 h-36 -rotate-90">
             <circle cx="72" cy="72" r="64" fill="none" className="stroke-muted/20" strokeWidth="12" />
@@ -173,7 +166,6 @@ export function Results() {
           </div>
         </div>
 
-        {/* Статистика */}
         <div className="flex w-full gap-4 mb-10">
           <div className="flex-1 rounded-[1.5rem] py-5 bg-green-500/5 border border-green-500/10 transition-all hover:bg-green-500/10">
             <div className="text-3xl font-black text-green-600 dark:text-green-400">{known}</div>
@@ -185,7 +177,6 @@ export function Results() {
           </div>
         </div>
 
-        {/* Кнопки действий */}
         <div className="flex flex-col gap-3 w-full">
           <button
             onClick={() => navigate(`/study/${topic.id}`)}

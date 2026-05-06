@@ -6,7 +6,7 @@ import { Results } from "./pages/Results";
 import { CreateEditTopic } from "./pages/CreateEditTopic";
 import { TopicManager } from "./pages/TopicManager";
 import { Auth } from "./pages/Auth";
-import { Tests } from "./pages/Tests"; // 👈 Исправлено имя на Tests
+import { Tests } from "./pages/Tests"; 
 import { useAuth } from "./context/AuthContext";
 import { Sidebar } from "./pages/Sidebar";
 import { Toaster } from "sonner";
@@ -43,7 +43,8 @@ export const router = createBrowserRouter([
       { path: "/study/:topicId", element: <Study /> },
       { path: "/results/:topicId", element: <Results /> },
       { path: "/topics/:topicId", element: <TopicManager /> },
-      { path: "/test", element: <Tests /> }, // 👈 Ссылка на компонент Tests
+      
+      { path: "/tests", element: <Tests /> }, 
 
       {
         element: <ProtectedRoute />,
@@ -52,6 +53,7 @@ export const router = createBrowserRouter([
           { path: "/topics/:topicId/edit", element: <CreateEditTopic /> },
         ],
       },
+      
       { path: "*", element: <Navigate to="/" replace /> },
     ],
   },

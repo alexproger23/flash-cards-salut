@@ -162,6 +162,85 @@ const normalizeAnswerForComparison = (value: string, expected: string): string =
   return normalized;
 };
 
+const getLevenshteinDistance = (left: string, right: string): number => {
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  const current = Array.from({ length: right.length + 1 }, () => 0);
+
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    current[0] = leftIndex;
+
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      const substitutionCost = left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1;
+      current[rightIndex] = Math.min(
+        previous[rightIndex] + 1,
+        current[rightIndex - 1] + 1,
+        previous[rightIndex - 1] + substitutionCost
+      );
+    }
+
+    for (let index = 0; index <= right.length; index += 1) {
+      previous[index] = current[index];
+    }
+  }
+
+  return previous[right.length];
+};
+
+const getStringSimilarity = (left: string, right: string): number => {
+  const maxLength = Math.max(left.length, right.length);
+  if (maxLength === 0) return 1;
+  return 1 - getLevenshteinDistance(left, right) / maxLength;
+};
+
+const getAnswerTokens = (value: string): string[] =>
+  value
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+
+const getTokenSimilarity = (left: string, right: string): number => {
+  const leftTokens = new Set(getAnswerTokens(left));
+  const rightTokens = new Set(getAnswerTokens(right));
+  if (leftTokens.size === 0 || rightTokens.size === 0) return 0;
+
+  let matches = 0;
+  leftTokens.forEach((token) => {
+    if (rightTokens.has(token)) matches += 1;
+  });
+
+  return (2 * matches) / (leftTokens.size + rightTokens.size);
+};
+
+const isAnswerCloseEnough = (spokenAnswer: string, expectedAnswer: string): boolean => {
+  const normalizedSpoken = normalizeAnswerForComparison(spokenAnswer, expectedAnswer);
+  const normalizedExpected = normalizeAnswerForComparison(expectedAnswer, expectedAnswer);
+
+  if (!normalizedSpoken) return false;
+  if (normalizedSpoken === normalizedExpected) return true;
+
+  // Numeric answers stay strict: 1917 and 1918 are visually close but semantically wrong.
+  if (/^\d+$/.test(normalizedExpected)) return false;
+  if (normalizedExpected.length <= 3 || normalizedSpoken.length <= 2) return false;
+
+  const shorter = normalizedSpoken.length < normalizedExpected.length ? normalizedSpoken : normalizedExpected;
+  const longer = normalizedSpoken.length < normalizedExpected.length ? normalizedExpected : normalizedSpoken;
+  if (shorter.length >= 4 && longer.includes(shorter) && shorter.length / longer.length >= 0.55) {
+    return true;
+  }
+
+  const stringSimilarity = getStringSimilarity(normalizedSpoken, normalizedExpected);
+  const tokenSimilarity = getTokenSimilarity(normalizedSpoken, normalizedExpected);
+  const similarityThreshold =
+    normalizedExpected.length < 8 ? 0.84 : normalizedExpected.length < 18 ? 0.78 : 0.72;
+
+  return (
+    stringSimilarity >= similarityThreshold ||
+    tokenSimilarity >= 0.72 ||
+    (stringSimilarity >= 0.68 && tokenSimilarity >= 0.5)
+  );
+};
+
 export function Study() {
   const { topicId } = useParams<{ topicId: string }>();
   const navigate = useNavigate();
@@ -477,7 +556,6 @@ export function Study() {
     if (actionMatches(action, ["check_answer", "submit_answer", "answer"]) || phrase.length > 0) {
       const spokenAnswer = getActionString(action, ["answer", "spoken_answer", "value", "text"]);
       const normalizedSpoken = normalizeAnswerForComparison(spokenAnswer, card.back);
-      const normalizedExpected = normalizeAnswerForComparison(card.back, card.back);
 
       setLastSpokenAnswer(spokenAnswer.trim());
       clearAutoRevealTimer();
@@ -488,7 +566,7 @@ export function Study() {
         return true;
       }
 
-      if (normalizedSpoken === normalizedExpected) {
+      if (isAnswerCloseEnough(spokenAnswer, card.back)) {
         setVoiceAttempts(0);
         setIsFlipped(true);
         speak("Правильно!", "answer_correct");

@@ -566,13 +566,13 @@ export function Study() {
 
   return (
     <div 
-      className="min-h-[100dvh] bg-background flex flex-col items-center px-4 py-6 overflow-hidden select-none"
+      className="h-[calc(100dvh-5rem)] min-h-0 bg-background flex flex-col items-center px-3 py-2 sm:px-4 sm:py-4 overflow-hidden select-none"
       onClick={activateVoice} // Клик по экрану «будит» Салют
     >
-      <div className="w-full max-w-md flex flex-col h-full gap-6">
+      <div className="w-full max-w-md flex flex-col h-full min-h-0 gap-3 sm:gap-4">
         
         {/* Header */}
-        <header className="flex justify-between items-center h-10 px-2">
+        <header className="flex justify-between items-center h-9 shrink-0 px-2">
           <button 
             onClick={(e) => { e.stopPropagation(); navigate("/"); }}
             className="flex items-center gap-1 text-muted-foreground font-bold text-xs"
@@ -593,7 +593,7 @@ export function Study() {
         </header>
 
         {/* Progress Bar */}
-        <div className="h-1 bg-muted rounded-full mx-2 overflow-hidden">
+        <div className="h-1 shrink-0 bg-muted rounded-full mx-2 overflow-hidden">
           <motion.div 
             className="h-full bg-primary"
             initial={{ width: 0 }}
@@ -603,7 +603,7 @@ export function Study() {
 
         {/* Card Canvas */}
         <div 
-          className="relative w-full h-[400px] perspective-1000 my-auto"
+          className="relative w-full h-[clamp(240px,42dvh,380px)] shrink-0 perspective-1000"
           onClick={(e) => { e.stopPropagation(); setIsFlipped(!isFlipped); }}
         >
           <AnimatePresence mode="wait">
@@ -630,9 +630,9 @@ export function Study() {
         </div>
 
         {/* Action Buttons */}
-        <div className="mt-auto space-y-6 pb-4">
+        <div className="mt-1 shrink-0 space-y-3 pb-2">
           <div
-            className="rounded-[1.5rem] bg-card border border-border p-4 text-sm shadow-sm"
+            className="rounded-[1.25rem] bg-card border border-border p-3 text-sm shadow-sm"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-3">
@@ -643,8 +643,8 @@ export function Study() {
                 {voiceStatus}
               </span>
             </div>
-            <p className="mt-2 text-xs text-muted-foreground">{voiceMessage}</p>
-            <label className="mt-3 flex items-center justify-between gap-3 text-xs font-bold text-foreground">
+            <p className="mt-1.5 line-clamp-2 text-xs text-muted-foreground">{voiceMessage}</p>
+            <label className="mt-2 flex items-center justify-between gap-3 text-xs font-bold text-foreground">
               <span>Автоответ после 3 ошибок</span>
               <input
                 type="checkbox"
@@ -654,17 +654,17 @@ export function Study() {
             </label>
           </div>
 
-          <div className={`text-center transition-opacity ${isFlipped ? "opacity-0" : "opacity-100"}`}>
+          <div className={`hidden sm:block text-center transition-opacity ${isFlipped ? "opacity-0" : "opacity-100"}`}>
              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-muted/30 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
                 <Info size={12} />
                 Нажми на экран или скажи «Переверни»
              </div>
           </div>
 
-          <div className="flex gap-4">
+          <div className="flex gap-3 sm:gap-4">
             <button 
               onClick={(e) => { e.stopPropagation(); handleAnswer(false); }}
-              className="flex-1 flex flex-col items-center gap-1 bg-card border-2 border-destructive/10 py-5 rounded-[2.5rem] active:scale-95 transition-all"
+              className="flex-1 flex flex-col items-center gap-1 bg-card border-2 border-destructive/10 py-3.5 sm:py-5 rounded-[2rem] sm:rounded-[2.5rem] active:scale-95 transition-all"
             >
               <X size={28} className="text-destructive" strokeWidth={3} />
               <span className="text-[10px] font-black text-destructive uppercase tracking-widest">Не знаю</span>
@@ -672,7 +672,7 @@ export function Study() {
 
             <button 
               onClick={(e) => { e.stopPropagation(); handleAnswer(true); }}
-              className="flex-1 flex flex-col items-center gap-1 bg-primary text-primary-foreground py-5 rounded-[2.5rem] shadow-xl shadow-primary/20 active:scale-95 transition-all"
+              className="flex-1 flex flex-col items-center gap-1 bg-primary text-primary-foreground py-3.5 sm:py-5 rounded-[2rem] sm:rounded-[2.5rem] shadow-xl shadow-primary/20 active:scale-95 transition-all"
             >
               <Check size={28} strokeWidth={3} />
               <span className="text-[10px] font-black uppercase tracking-widest">Знаю</span>

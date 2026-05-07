@@ -9,6 +9,38 @@ interface FlashCardProps {
   onFlip?: (flipped: boolean) => void;
 }
 
+const getAdaptiveTextStyle = (text: string, side: "front" | "back"): React.CSSProperties => {
+  const length = text.trim().length;
+  const longestWord = text.split(/\s+/).reduce((max, word) => Math.max(max, word.length), 0);
+
+  let min = side === "front" ? 1.15 : 0.95;
+  const baseMax = side === "front" ? 2.6 : 1.55;
+
+  let max = baseMax;
+  if (length > 340) {
+    min = side === "front" ? 0.8 : 0.72;
+    max = side === "front" ? 1.05 : 0.86;
+  } else if (length > 260) {
+    min = side === "front" ? 0.9 : 0.78;
+    max = side === "front" ? 1.2 : 0.95;
+  } else if (length > 220) max = side === "front" ? 1.45 : 1.05;
+  else if (length > 150) max = side === "front" ? 1.7 : 1.15;
+  else if (length > 90) max = side === "front" ? 2.0 : 1.25;
+  else if (length > 50) max = side === "front" ? 2.3 : 1.4;
+
+  if (longestWord > 18) {
+    min = Math.min(min, side === "front" ? 0.86 : 0.74);
+    max = Math.min(max, side === "front" ? 1.65 : 1.1);
+  }
+
+  return {
+    fontSize: `clamp(${min}rem, ${side === "front" ? "6vw" : "3.8vw"}, ${max}rem)`,
+    lineHeight: length > 220 ? 1.1 : length > 120 ? 1.16 : 1.25,
+    overflowWrap: "anywhere",
+    wordBreak: "break-word",
+  };
+};
+
 export function FlashCard({ front, back, frontLabel, backLabel, flipped, onFlip }: FlashCardProps) {
   const [internalFlipped, setInternalFlipped] = useState(false);
   const isFlipped = flipped ?? internalFlipped;
@@ -29,16 +61,16 @@ export function FlashCard({ front, back, frontLabel, backLabel, flipped, onFlip 
       <div className={`card-inner ${isFlipped ? "is-flipped" : ""}`}>
         
         {/* ЛИЦЕВАЯ СТОРОНА */}
-        <div className="card-face bg-card border-[3px] border-border rounded-[3rem] p-10 flex flex-col justify-between shadow-xl">
-          <div className="text-center h-6">
+        <div className="card-face bg-card border-[3px] border-border rounded-[2rem] sm:rounded-[2.5rem] p-5 sm:p-8 flex flex-col justify-between shadow-xl overflow-hidden">
+          <div className="text-center min-h-5">
             {frontLabel && (
               <span className="text-[10px] font-black uppercase tracking-[0.3em] text-primary">
                 {frontLabel}
               </span>
             )}
           </div>
-          <div className="flex-1 flex items-center justify-center">
-            <h2 className="text-center font-black text-foreground break-words" style={{ fontSize: "clamp(1.5rem, 8vw, 2.75rem)" }}>
+          <div className="flex-1 min-h-0 flex items-center justify-center overflow-hidden py-3">
+            <h2 className="max-h-full overflow-hidden text-center font-black text-foreground" style={getAdaptiveTextStyle(front, "front")}>
               {front}
             </h2>
           </div>
@@ -48,16 +80,16 @@ export function FlashCard({ front, back, frontLabel, backLabel, flipped, onFlip 
         </div>
 
         {/* ОБРАТНАЯ СТОРОНА */}
-        <div className="card-face card-face-back bg-card border-[3px] border-primary/30 rounded-[3rem] p-10 flex flex-col justify-between shadow-2xl">
-          <div className="text-center h-6">
+        <div className="card-face card-face-back bg-card border-[3px] border-primary/30 rounded-[2rem] sm:rounded-[2.5rem] p-5 sm:p-8 flex flex-col justify-between shadow-2xl overflow-hidden">
+          <div className="text-center min-h-5">
             {backLabel && (
               <span className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground/60">
                 {backLabel}
               </span>
             )}
           </div>
-          <div className="flex-1 flex items-center justify-center overflow-y-auto no-scrollbar">
-            <p className="text-center font-bold text-foreground" style={{ fontSize: "clamp(1.1rem, 5vw, 1.5rem)" }}>
+          <div className="flex-1 min-h-0 flex items-center justify-center overflow-hidden py-3">
+            <p className="max-h-full overflow-hidden text-center font-bold text-foreground" style={getAdaptiveTextStyle(back, "back")}>
               {back}
             </p>
           </div>

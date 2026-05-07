@@ -4,11 +4,11 @@ import {
   ChevronLeft, Save, Plus, Sparkles, 
   BookText, Microscope, Landmark, Calculator, Globe, Lightbulb, 
   Music, Palette, TestTube, Leaf, Trophy, Brain, SpellCheck, 
-  Target, Dna, Ruler, Languages, Theater, Ghost, Rocket
+  Target, Dna, Ruler, Languages, Theater, Ghost, Rocket, Loader2
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { fetchUserData, saveCustomTopic, type CustomTopic } from "../data/customTopics";
+import { fetchUserData, generateCustomTopicCards, saveCustomTopic, type CustomTopic } from "../data/customTopics";
 import { useVoiceActionHandler, useVoiceAssistant } from "../voice/VoiceAssistantProvider";
 import {
   actionMatches,
@@ -79,6 +79,9 @@ export function CreateEditTopic() {
   const [description, setDescription] = useState("");
   const [iconId, setIconId] = useState("BookText");
   const [error, setError] = useState("");
+  const [autoGenerate, setAutoGenerate] = useState(false);
+  const [cardsCount, setCardsCount] = useState(10);
+  const [isGenerating, setIsGenerating] = useState(false);
   
   // Сохраняем исходную тему при редактировании, чтобы не потерять карточки
   const [existingTopic, setExistingTopic] = useState<CustomTopic | null>(null);
@@ -124,7 +127,14 @@ export function CreateEditTopic() {
       return;
     }
 
+    if (!isEditing && autoGenerate && nextDescription.trim().length < 15) {
+      setError("Для автогенерации нужно описание минимум 15 символов.");
+      speak("Для автогенерации нужно описание минимум 15 символов.", "topic_description_missing");
+      return;
+    }
+
     try {
+      setIsGenerating(!isEditing && autoGenerate);
       if (isEditing && topicId && existingTopic) {
         // Обновляем существующую
         const updatedTopic = { 
@@ -138,6 +148,10 @@ export function CreateEditTopic() {
         navigate(`/topics/${topicId}`);
       } else {
         // Создаем новую
+        const generatedCards = autoGenerate
+          ? await generateCustomTopicCards(nextDescription.trim(), cardsCount)
+          : [];
+
         const newTopic: CustomTopic = {
           id: `custom-${Date.now()}`,
           title: nextTitle,
@@ -146,7 +160,7 @@ export function CreateEditTopic() {
           frontLabel: "Вопрос",
           backLabel: "Ответ",
           color: "#f0f4ff", // Дефолтный цвет
-          cards: [],
+          cards: generatedCards,
           isCustom: true
         };
         await saveCustomTopic(newTopic);
@@ -154,6 +168,7 @@ export function CreateEditTopic() {
         navigate(`/topics/${newTopic.id}`);
       }
     } catch (e) {
+      setIsGenerating(false);
       console.error("Ошибка сохранения:", e);
       toast.error("Ошибка при сохранении");
     }
@@ -259,8 +274,46 @@ export function CreateEditTopic() {
               value={description}
               onChange={setDescription}
               placeholder="О чем этот набор карточек?"
-              maxLength={120}
+              maxLength={500}
             />
+            {!isEditing && (
+              <div className="rounded-[1.5rem] border border-border bg-muted/30 p-4">
+                <label className="flex items-center justify-between gap-4">
+                  <span className="flex items-center gap-3 text-sm font-black text-foreground">
+                    <Sparkles size={18} className="text-primary" />
+                    Автогенерация карточек
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={autoGenerate}
+                    onChange={(event) => {
+                      setAutoGenerate(event.target.checked);
+                      setError("");
+                    }}
+                    className="h-5 w-5 accent-primary"
+                  />
+                </label>
+
+                {autoGenerate && (
+                  <div className="mt-4 flex items-center justify-between gap-4">
+                    <span className="text-xs font-bold text-muted-foreground">
+                      Описание минимум 15 символов.
+                    </span>
+                    <select
+                      value={cardsCount}
+                      onChange={(event) => setCardsCount(Number(event.target.value))}
+                      className="shrink-0 rounded-xl border border-border bg-background px-3 py-2 text-sm font-bold outline-none"
+                    >
+                      {[5, 10, 15, 20, 25, 30].map((count) => (
+                        <option key={count} value={count}>
+                          {count}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {error && (
@@ -273,9 +326,10 @@ export function CreateEditTopic() {
           {/* КНОПКА СОХРАНЕНИЯ */}
           <button
             onClick={handleSave}
+            disabled={isGenerating}
             className="w-full mt-12 bg-primary text-primary-foreground py-5 rounded-[1.5rem] font-black uppercase tracking-widest text-sm flex items-center justify-center gap-3 shadow-2xl shadow-primary/30 hover:brightness-110 active:scale-[0.97] transition-all relative z-10"
           >
-            {isEditing ? <Save size={20} strokeWidth={3} /> : <Plus size={20} strokeWidth={3} />}
+            {isGenerating ? <Loader2 size={20} className="animate-spin" /> : isEditing ? <Save size={20} strokeWidth={3} /> : <Plus size={20} strokeWidth={3} />}
             {isEditing ? "Сохранить изменения" : "Создать колоду"}
           </button>
         </div>

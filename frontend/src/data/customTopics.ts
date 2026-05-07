@@ -1,8 +1,13 @@
 export interface CustomTopic {
   id: string;
   title: string;
+  description?: string;
   emoji: string;
-  cards: { front: string; back: string }[];
+  frontLabel?: string;
+  backLabel?: string;
+  color?: string;
+  isCustom?: boolean;
+  cards: { id?: string; front: string; back: string }[];
 }
 
 const getHeaders = () => {
@@ -74,4 +79,20 @@ export const hideDefaultTopic = async (topicId: string) => {
   } catch (err) {
     console.error("Ошибка при скрытии темы:", err);
   }
+};
+
+export const generateCustomTopicCards = async (description: string, count: number) => {
+  const res = await fetch("http://localhost:5000/api/topics/generate-cards", {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify({ description, count })
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.error || "Не удалось сгенерировать карточки");
+  }
+
+  const data = await res.json();
+  return data.cards as CustomTopic["cards"];
 };

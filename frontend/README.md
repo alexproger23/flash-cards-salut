@@ -40,17 +40,18 @@ npm run build
 ## Основная структура
 
 ```text
-src/app/App.tsx                     # Router + VoiceAssistantProvider
-src/app/routes.tsx                  # Маршруты приложения
-src/app/pages/Home.tsx              # Главная, список тем
-src/app/pages/TopicManager.tsx      # Управление своей темой и карточками
-src/app/pages/CreateEditTopic.tsx   # Создание/редактирование темы
-src/app/pages/Study.tsx             # Тренировка по карточкам
-src/app/pages/Results.tsx           # Результаты тренировки
-src/app/components/FlashCard.tsx    # Переворачиваемая карточка
-src/app/data/flashcards.ts          # Встроенные примеры тем
-src/app/data/customTopics.ts        # Свои темы в localStorage
-src/app/voice/                      # Интеграция Salute
+src/App.tsx                         # Router + VoiceAssistantProvider
+src/routes.tsx                      # Маршруты приложения
+src/pages/Home.tsx                  # Главная, список тем
+src/pages/TopicManager.tsx          # Управление своей темой и карточками
+src/pages/CreateEditTopic.tsx       # Создание/редактирование темы
+src/pages/Study.tsx                 # Тренировка по карточкам
+src/pages/Results.tsx               # Результаты тренировки
+src/pages/Tests.tsx                 # Режим теста
+src/pages/components/FlashCard.tsx  # Переворачиваемая карточка
+src/data/flashcards.ts              # Встроенные примеры тем
+src/data/customTopics.ts            # Свои темы через backend API
+src/voice/                          # Интеграция Salute
 docs/salute-voice.md                # Формат команд SmartApp Code
 ```
 
@@ -69,6 +70,7 @@ docs/salute-voice.md                # Формат команд SmartApp Code
 | `/` | Главная со списком тем |
 | `/study/:topicId` | Тренировка |
 | `/results/:topicId` | Результаты |
+| `/tests` | Режим теста |
 | `/topics/new` | Создание своей темы |
 | `/topics/:topicId` | Управление своей темой |
 | `/topics/:topicId/edit` | Редактирование своей темы |
@@ -77,15 +79,15 @@ docs/salute-voice.md                # Формат команд SmartApp Code
 
 ## Salute / голос
 
-Голосовой слой находится в `src/app/voice`.
+Голосовой слой находится в `src/voice`.
 
 Главные файлы:
 
 ```text
-src/app/voice/assistantClient.ts        # createSmartappDebugger/createAssistant, parsing events
-src/app/voice/VoiceAssistantProvider.tsx # общий провайдер, dispatch команд
-src/app/voice/flashcardVoice.ts         # helper-функции для action parameters
-src/app/voice/compactNativePanel.ts     # компактная dev-панель вместо нижней панели Salute
+src/voice/assistantClient.ts         # createSmartappDebugger/createAssistant, parsing events
+src/voice/VoiceAssistantProvider.tsx # общий провайдер, dispatch команд
+src/voice/flashcardVoice.ts          # helper-функции для action parameters
+src/voice/compactNativePanel.ts      # компактная dev-панель вместо нижней панели Salute
 ```
 
 В development используется `createSmartappDebugger`. В опубликованном CanvasApp используется `createAssistant`.
@@ -140,6 +142,7 @@ docs/salute-voice.md
 | `start_study` | Начать тренировку |
 | `show_answer` | Показать и озвучить ответ |
 | `flip_card` | Перевернуть карточку |
+| `check_answer` | Проверить голосовой ответ |
 | `repeat_question` | Озвучить текущий вопрос |
 | `know_card` | Отметить карточку как известную |
 | `dont_know_card` | Отметить карточку как неизвестную |

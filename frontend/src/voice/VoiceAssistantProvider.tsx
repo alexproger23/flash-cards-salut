@@ -14,6 +14,7 @@ import {
   type VoiceAssistant,
   type VoiceAssistantMode,
 } from "./assistantClient";
+import { subscribeCompactNativePanelRecognition } from "./compactNativePanel";
 import {
   actionMatches,
   findTopicFromAction,
@@ -24,7 +25,9 @@ import { fetchUserData, saveCustomTopic, type CustomTopic } from "../data/custom
 import { topics as baseTopics } from "../data/flashcards";
 
 const getTopicPath = (topic: any, mode: 'study' | 'open') => {
-  return mode === 'study' ? `/study/${topic.id}` : `/topics/${topic.id}`;
+  if (mode === 'study') return `/study/${topic.id}`;
+  const isBaseTopic = baseTopics.some((baseTopic) => baseTopic.id === topic.id);
+  return isBaseTopic ? `/study/${topic.id}` : `/topics/${topic.id}`;
 };
 
 export type AssistantScreenState = Record<string, unknown> & {
@@ -227,6 +230,13 @@ export function VoiceAssistantProvider({
 
   const setAssistantState = useCallback((state: AssistantScreenState) => {
     assistantStateRef.current = state;
+
+    if (state.screen !== "study") {
+      setRecognizedFinal(false);
+      setRecognizedText("");
+      setRecognizedStatus("idle");
+      setIsSpeaking(false);
+    }
   }, []);
 
   const registerHandler = useCallback((handler: VoiceActionHandler, priority = 0) => {
@@ -248,6 +258,12 @@ export function VoiceAssistantProvider({
   }, []);
 
   useEffect(() => {
+    const unsubscribeRecognition = subscribeCompactNativePanelRecognition((state) => {
+      setRecognizedFinal(state.final);
+      setRecognizedText(state.text);
+      setRecognizedStatus(state.status);
+    });
+
     const setup = createVoiceAssistant({
       getState: () => buildAssistantState(assistantStateRef.current, customTopicsRef.current),
       getRecoveryState: () => ({
@@ -255,13 +271,21 @@ export function VoiceAssistantProvider({
         topics: [...customTopicsRef.current, ...baseTopics],
       }),
       onAction: (action) => dispatchAction(action),
-      onError: (event) => setError(formatAssistantError(event)),
+      onError: (event) => {
+        const message = formatAssistantError(event);
+        console.error("Salute assistant error:", message, event);
+        setError(message);
+      },
       onTts: (event) => {
         const state = getTtsState(event);
-        if (state === "start" || state === "play") {
+        if (state === "start" || state === "started" || state === "play") {
           clearSpeakingTimeout();
           setIsSpeaking(true);
-        } else if (["stop", "end", "done"].includes(state)) {
+          speakingTimeoutRef.current = window.setTimeout(() => {
+            speakingTimeoutRef.current = null;
+            setIsSpeaking(false);
+          }, 6000);
+        } else if (["stop", "stopped", "end", "done"].includes(state)) {
           clearSpeakingTimeout();
           setIsSpeaking(false);
         }
@@ -274,9 +298,11 @@ export function VoiceAssistantProvider({
     setDisabledReason(setup.disabledReason || "");
 
     return () => {
+      unsubscribeRecognition();
       clearSpeakingTimeout();
       setup.assistant.close?.();
       assistantRef.current = null;
+      startListeningRef.current = () => false;
     };
   }, [clearSpeakingTimeout, dispatchAction]);
 

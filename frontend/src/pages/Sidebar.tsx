@@ -66,7 +66,7 @@ export function Sidebar() {
                 <LayoutGrid size={18} strokeWidth={2.5} /> Главная
               </button>
               <button
-                onClick={() => navigate("/test")}
+                onClick={() => navigate("/tests")}
                 className="w-full flex items-center gap-3 px-4 py-3 hover:bg-primary/10 hover:text-primary rounded-[1.25rem] transition-all text-sm font-bold"
               >
                 <BrainCircuit size={18} strokeWidth={2.5} /> Режим теста

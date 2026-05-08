@@ -43,7 +43,7 @@ export const topics: Topic[] = [
     id: "history-dates",
     title: "History Dates",
     description: "Key moments that shaped world history",
-    emoji: "History", // Было: 🏛️
+    emoji: "History", 
     frontLabel: "Date",
     backLabel: "Event",
     color: "#fff8f0",
@@ -66,7 +66,7 @@ export const topics: Topic[] = [
     id: "russian-history-years",
     title: "История России: годы",
     description: "20 вопросов по российской истории, где ответом должен быть год",
-    emoji: "📜",
+    emoji: "History",
     frontLabel: "Событие",
     backLabel: "Год",
     color: "#f7f1e8",

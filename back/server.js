@@ -104,6 +104,72 @@ const normalizeGeneratedCards = (payload, count) => {
   });
 };
 
+const stringifyLlmContent = (value) => {
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+};
+
+const parseGeneratedCards = (content, count) => {
+  if (Array.isArray(content?.cards)) {
+    return normalizeGeneratedCards(content, count);
+  }
+
+  return normalizeGeneratedCards(extractJsonObject(content), count);
+};
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const isRetriableLlmError = (error) => {
+  const code = error?.cause?.code || error?.code;
+  return error?.name === 'AbortError' ||
+    ['EAI_AGAIN', 'ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'EHOSTUNREACH', 'ECONNREFUSED'].includes(code) ||
+    error?.status === 429 ||
+    error?.status >= 500;
+};
+
+const buildCardsPrompt = ({ description, count }) => [
+  `Сгенерируй ${count} учебных карточек по описанию темы.`,
+  `Описание: ${description}`,
+  '',
+  'Верни ровно один валидный JSON-объект без markdown, без комментариев и без текста до или после JSON.',
+  'Структура ответа строго такая:',
+  '{"cards":[{"front":"вопрос или термин","back":"краткий правильный ответ"}]}',
+  '',
+  'Требования к структуре:',
+  `- cards должен быть массивом ровно из ${count} объектов.`,
+  '- каждый объект должен содержать только строковые поля front и back;',
+  '- front должен быть вопросом или термином;',
+  '- back должен быть кратким правильным ответом;',
+  '- не добавляй id, title, description, markdown-блоки или поясняющий текст;',
+  '- экранируй кавычки внутри строк так, чтобы весь ответ можно было сразу распарсить через JSON.parse.',
+  '',
+  'Текст карточек должен быть на русском языке.',
+].join('\n');
+
+const buildRepairPrompt = ({ previousResponse, parseError, count }) => [
+  'Предыдущий ответ не удалось распарсить или привести к нужной структуре.',
+  `Ошибка парсинга: ${parseError.message}`,
+  '',
+  'Исправь только формат ответа, сохрани смысл уже сгенерированных карточек.',
+  'Верни ровно один валидный JSON-объект без markdown, без комментариев и без текста до или после JSON.',
+  'Структура ответа строго такая:',
+  '{"cards":[{"front":"вопрос или термин","back":"краткий правильный ответ"}]}',
+  '',
+  'Требования:',
+  `- cards должен быть массивом ровно из ${count} объектов;`,
+  '- каждый объект должен содержать только строковые поля front и back;',
+  '- если карточек больше, оставь лучшие;',
+  '- если карточек меньше, добавь недостающие в том же стиле;',
+  '- экранируй кавычки внутри строк так, чтобы весь ответ можно было сразу распарсить через JSON.parse.',
+  '',
+  'Предыдущий ответ:',
+  previousResponse,
+].join('\n');
+
 const callCardsLlm = async ({ description, count }) => {
   const apiKey = process.env.LLM_API_KEY;
   const apiUrl = process.env.LLM_API_URL;
@@ -125,72 +191,94 @@ const callCardsLlm = async ({ description, count }) => {
     throw new Error(`Missing LLM env variables: ${missing}`);
   }
 
-  const prompt = [
-    `Сгенерируй ${count} учебных карточек по описанию темы.`,
-    `Описание: ${description}`,
-    '',
-    'Верни только валидный JSON без markdown.',
-    'Формат:',
-    '{"cards":[{"front":"вопрос или термин","back":"краткий правильный ответ"}]}',
-    'Текст карточек должен быть на русском языке. Front должен быть вопросом или термином, back должен быть ответом.',
-  ].join('\n');
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(isYandexResponsesApi
+      ? { Authorization: `Api-Key ${apiKey}`, 'OpenAI-Project': folderId }
+      : { Authorization: `Bearer ${apiKey}`, ...(folderId ? { 'OpenAI-Project': folderId } : {}) }),
+  };
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 60000);
-
-  try {
-    const headers = {
-      'Content-Type': 'application/json',
-      ...(isYandexResponsesApi
-        ? { Authorization: `Api-Key ${apiKey}`, 'OpenAI-Project': folderId }
-        : { Authorization: `Bearer ${apiKey}`, ...(folderId ? { 'OpenAI-Project': folderId } : {}) }),
-    };
-
+  const requestCards = async (prompt, temperature) => {
     const body = isYandexResponsesApi
       ? {
           model,
-          instructions: 'Ты помогаешь создавать учебные flashcards. Отвечай только валидным JSON.',
+          instructions: 'Ты помогаешь создавать учебные flashcards. Отвечай только валидным JSON в заданной структуре.',
           input: prompt,
-          temperature: 0.3,
+          temperature,
           max_output_tokens: Number.parseInt(process.env.LLM_MAX_OUTPUT_TOKENS || '2000', 10),
         }
       : {
           model,
           messages: [
-            { role: 'system', content: 'РўС‹ РїРѕРјРѕРіР°РµС€СЊ СЃРѕР·РґР°РІР°С‚СЊ СѓС‡РµР±РЅС‹Рµ flashcards.' },
+            { role: 'system', content: 'Ты помогаешь создавать учебные flashcards. Отвечай только валидным JSON в заданной структуре.' },
             { role: 'user', content: prompt },
           ],
-          temperature: 0.4,
+          temperature,
           response_format: { type: 'json_object' },
         };
 
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
+    const maxAttempts = 3;
+    let responseText = '';
 
-    const responseText = await response.text();
-    if (!response.ok) {
-      throw new Error(`LLM request failed with ${response.status}: ${responseText.slice(0, 500)}`);
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 60000);
+
+      try {
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+
+        responseText = await response.text();
+        if (!response.ok) {
+          const error = new Error(`LLM request failed with ${response.status}: ${responseText.slice(0, 500)}`);
+          error.status = response.status;
+          throw error;
+        }
+        break;
+      } catch (error) {
+        if (attempt >= maxAttempts || !isRetriableLlmError(error)) {
+          throw error;
+        }
+        console.warn(`LLM request failed on attempt ${attempt}/${maxAttempts}, retrying:`, error);
+        await wait(500 * attempt);
+      } finally {
+        clearTimeout(timeout);
+      }
     }
 
-    const data = JSON.parse(responseText);
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      return responseText;
+    }
     if (Array.isArray(data?.cards)) {
-      return normalizeGeneratedCards(data, count);
+      return data;
     }
 
-    const content =
-      data?.choices?.[0]?.message?.content ??
+    return data?.choices?.[0]?.message?.content ??
       data?.choices?.[0]?.text ??
       data?.output_text ??
       data?.output?.flatMap((item) => item?.content || []).find((item) => item?.text)?.text ??
       responseText;
+  };
 
-    return normalizeGeneratedCards(extractJsonObject(content), count);
-  } finally {
-    clearTimeout(timeout);
+  const content = await requestCards(buildCardsPrompt({ description, count }), 0.3);
+  try {
+    return parseGeneratedCards(content, count);
+  } catch (parseError) {
+    console.warn('LLM card generation response parse failed, retrying with repair prompt:', parseError);
+    const repairPrompt = buildRepairPrompt({
+      previousResponse: stringifyLlmContent(content),
+      parseError,
+      count,
+    });
+    const repairedContent = await requestCards(repairPrompt, 0);
+    return parseGeneratedCards(repairedContent, count);
   }
 };
 

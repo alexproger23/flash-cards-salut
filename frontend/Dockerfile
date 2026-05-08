@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1.7
 FROM node:20-alpine
 
 WORKDIR /app
@@ -6,7 +5,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY scripts/ ./scripts/
 
-RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
+RUN npm ci --no-audit --no-fund
 
 COPY . .
 

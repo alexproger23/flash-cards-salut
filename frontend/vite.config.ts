@@ -17,6 +17,7 @@ function figmaAssetResolver() {
 }
 
 export default defineConfig({
+  base: '/flash-cards-salut/',
   envPrefix: ['VITE_', 'REACT_APP_'],
   plugins: [
     figmaAssetResolver(),

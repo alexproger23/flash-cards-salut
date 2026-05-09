@@ -3,6 +3,8 @@ import { useNavigate } from "react-router";
 import { useAuth } from "../context/AuthContext"; 
 import { Mail, Lock, LogIn, UserPlus, AlertCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+const API_URL = import.meta.env.VITE_API_URL;
+
 
 export function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -20,7 +22,7 @@ export function Auth() {
     setErrorMsg(null);
 
     
-    const endpoint = isLogin ? "http://localhost:5000/api/auth/login" : "http://localhost:5000/api/auth/register";
+    const endpoint = isLogin ? `${API_URL}/auth/login` : `${API_URL}/auth/register`;
 
     try {
       const response = await fetch(endpoint, {

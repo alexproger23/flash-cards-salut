@@ -5,21 +5,27 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
+require('dotenv').config(); // Загружаем .env в самом начале
 
-const app = express();
-const PORT = 5000;
-const SECRET_KEY = 'super-secret-key-for-flashcards';
+const app = express(); // СНАЧАЛА создаем app
 
+// Настройки Middlewares (ТОЛЬКО ОДИН РАЗ)
+app.use(cors()); 
+app.use(express.json());
+
+// Константы из окружения
+const PORT = process.env.PORT || 5000;
+const SECRET_KEY = process.env.JWT_SECRET || 'super-secret-key-for-flashcards';
+
+// Функция загрузки ENV (если нужно ручное управление, но dotenv выше уже справляется)
 const loadEnvFile = (filePath) => {
   if (!fs.existsSync(filePath)) return;
   const lines = fs.readFileSync(filePath, 'utf8').split(/\r?\n/);
-
   lines.forEach((line) => {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#')) return;
     const separatorIndex = trimmed.indexOf('=');
     if (separatorIndex === -1) return;
-
     const key = trimmed.slice(0, separatorIndex).trim();
     const rawValue = trimmed.slice(separatorIndex + 1).trim();
     const value = rawValue.replace(/^['"]|['"]$/g, '');
@@ -28,15 +34,12 @@ const loadEnvFile = (filePath) => {
     }
   });
 };
-
 loadEnvFile(path.resolve(__dirname, '../.env'));
 loadEnvFile(path.resolve(__dirname, '.env'));
 
-app.use(cors());
-app.use(express.json());
-
-// 1. ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ
-const db = new sqlite3.Database('./database.db');
+// Путь к БД
+const DB_PATH = process.env.DB_PATH || './database.db';
+const db = new sqlite3.Database(DB_PATH);
 
 // Создаем таблицы
 db.serialize(() => {
@@ -69,6 +72,7 @@ db.serialize(() => {
     UNIQUE(user_id, topic_id)
   )`);
 });
+
 
 // Middleware для проверки токена
 const extractJsonObject = (value) => {
@@ -400,5 +404,7 @@ app.post('/api/topics/hide-default', authenticate, (req, res) => {
   });
 });
 
-app.listen(PORT, () => console.log(`Сервер запущен на порту ${PORT}`));
-
+// В САМОМ КОНЦЕ ФАЙЛА исправляем запуск:
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Сервер запущен на порту ${PORT}`);
+});

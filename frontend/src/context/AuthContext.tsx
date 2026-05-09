@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from "react";
+const API_URL = import.meta.env.VITE_API_URL;
 
 // Создаем свой тип пользователя вместо супабейзовского
 export interface User {
@@ -30,8 +31,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        // Стучимся на НАШ будущий бэкенд, чтобы проверить токен
-        const response = await fetch("http://localhost:5000/api/auth/me", {
+        
+        const response = await fetch(`${API_URL}/auth/me`, {
           headers: {
             "Authorization": `Bearer ${token}`
           }

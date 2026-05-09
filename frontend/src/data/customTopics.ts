@@ -1,3 +1,5 @@
+const API_URL = import.meta.env.VITE_API_URL;
+
 export interface CustomTopic {
   id: string;
   title: string;
@@ -22,7 +24,7 @@ const getHeaders = () => {
 // Загрузка данных с сервера
 export const fetchUserData = async () => {
   try {
-    const res = await fetch("http://localhost:5000/api/userdata", { 
+    const res = await fetch(`${API_URL}/userdata`, { 
       headers: getHeaders(),
       // Добавим небольшой таймаут, чтобы fetch не висел вечно
       signal: AbortSignal.timeout(5000) 
@@ -44,7 +46,7 @@ export const fetchUserData = async () => {
 // Сохранение темы
 export const saveCustomTopic = async (topic: CustomTopic) => {
   try {
-    const res = await fetch("http://localhost:5000/api/topics", {
+    const res = await fetch(`${API_URL}/topics`, {
       method: "POST",
       headers: getHeaders(),
       body: JSON.stringify(topic)
@@ -59,7 +61,7 @@ export const saveCustomTopic = async (topic: CustomTopic) => {
 // Удаление темы
 export const deleteCustomTopic = async (topicId: string) => {
   try {
-    await fetch(`http://localhost:5000/api/topics/${topicId}`, {
+    await fetch(`${API_URL}/topics/${topicId}`, {
       method: "DELETE",
       headers: getHeaders()
     });
@@ -71,7 +73,7 @@ export const deleteCustomTopic = async (topicId: string) => {
 // Скрытие тем
 export const hideDefaultTopic = async (topicId: string) => {
   try {
-    await fetch("http://localhost:5000/api/topics/hide-default", {
+    await fetch(`${API_URL}/topics/hide-default`, {
       method: "POST",
       headers: getHeaders(),
       body: JSON.stringify({ topicId })
@@ -82,7 +84,7 @@ export const hideDefaultTopic = async (topicId: string) => {
 };
 
 export const generateCustomTopicCards = async (description: string, count: number) => {
-  const res = await fetch("http://localhost:5000/api/topics/generate-cards", {
+  const res = await fetch(`${API_URL}/topics/generate-cards`, {
     method: "POST",
     headers: getHeaders(),
     body: JSON.stringify({ description, count })

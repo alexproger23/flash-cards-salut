@@ -98,8 +98,8 @@ export function Study() {
 
   // 4. ОБРАБОТЧИК ГОЛОСА
   const onVoice = useCallback((action: any) => {
-    const card = topic?.cards[currentIndex];
-    // Блокируем обработку, если ассистент сам говорит
+    const card = topic?.cards?.[currentIndex];
+    // Блокируем обработку, если ассистент сам говорит или карточки нет
     if (!card || isSpeaking) return false;
 
     const rawPhrase = getActionString(action, ["answer", "text", "spoken_answer", "value"]) || "";
@@ -141,7 +141,35 @@ export function Study() {
   useVoiceActionHandler(onVoice, [onVoice]);
 
   if (!topic) return null;
+
+  // 🚨 ПРОВЕРКА НА ПУСТУЮ КОЛОДУ (исправляет краш) 🚨
+  if (!topic.cards || topic.cards.length === 0) {
+    return (
+      <div className="min-h-[100dvh] bg-background flex flex-col items-center justify-center px-4 py-4 text-center">
+        <div className="w-full max-w-md flex flex-col items-center gap-6">
+          <div className="bg-card p-8 rounded-[2rem] shadow-sm border-2 border-border w-full">
+            <h2 className="text-xl font-black uppercase mb-3">В этой колоде пусто 📭</h2>
+            <p className="text-muted-foreground text-sm font-medium mb-8">
+              Добавьте карточки в эту тему, чтобы начать изучение.
+            </p>
+            <button 
+              // Если у тебя есть страница создания/редактирования карточек, 
+              // поменяй "/" на нужный маршрут, например: `/edit/${topic.id}`
+              onClick={() => navigate("/")} 
+              className="w-full bg-primary text-primary-foreground py-4 rounded-[1.5rem] font-bold shadow-lg active:scale-95 transition-transform"
+            >
+              Вернуться на главную
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const card = topic.cards[currentIndex];
+
+  // Дополнительная защита: если индекс вышел за пределы (хотя логика moveNext это предотвращает)
+  if (!card) return null;
 
   return (
     <div className="min-h-[100dvh] bg-background flex flex-col items-center px-4 py-4 overflow-hidden">
@@ -172,7 +200,7 @@ export function Study() {
           </AnimatePresence>
         </div>
 
-        {/* Индикатор - ТЕПЕРЬ ОН ВСЕГДА ПОКАЗЫВАЕТ СТАТУС МИКРОФОНА */}
+        {/* Индикатор микрофона */}
         <div className="shrink-0 space-y-3 pb-8">
           <motion.div 
             animate={{ 

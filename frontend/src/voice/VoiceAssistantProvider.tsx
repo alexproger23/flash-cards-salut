@@ -18,12 +18,12 @@ import { subscribeCompactNativePanelRecognition } from "./compactNativePanel";
 import {
   actionMatches,
   findTopicFromAction,
-  getTopicDescriptionFromAction,
-  getTopicTitleFromAction,
 } from "./flashcardVoice";
-import { fetchUserData, saveCustomTopic, type CustomTopic } from "../data/customTopics";
+import { fetchUserData, type CustomTopic } from "../data/customTopics";
 import { topics as baseTopics } from "../data/flashcards";
 
+/** * Вспомогательные функции для путей 
+ */
 const getTopicPath = (topic: any, mode: 'study' | 'open') => {
   if (mode === 'study') return `/study/${topic.id}`;
   const isBaseTopic = baseTopics.some((baseTopic) => baseTopic.id === topic.id);
@@ -62,6 +62,9 @@ type VoiceAssistantContextValue = {
 
 const VoiceAssistantContext = createContext<VoiceAssistantContextValue | null>(null);
 
+/**
+ * Логика обработки TTS состояний
+ */
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
@@ -203,15 +206,12 @@ export function VoiceAssistantProvider({
 
   const dispatchAction = useCallback(
     async (action: VoiceAction) => {
-      // КЛЮЧЕВОЙ ЛОГ: посмотри его в консоли Chrome F12
       console.log(">>> САЛЮТ ПРИСЛАЛ ЭКШЕН:", action.type, action);
-
       setLastAction(action);
       setError("");
       
       const handlers = [...handlersRef.current].sort((a, b) => b.priority - a.priority || b.id - a.id);
       
-      // Сначала даем шанс локальным обработчикам (например, в компоненте Flashcard)
       for (const { handler } of handlers) {
         if (handler(action)) {
             console.log("Экшен обработан локальным хэндлером");
@@ -219,7 +219,6 @@ export function VoiceAssistantProvider({
         }
       }
       
-      // Если никто на странице не забрал экшен, проверяем глобальные
       if (await handleGlobalAction(action)) return;
       
       console.warn("Команда не была обработана ни одним хэндлером");
@@ -228,9 +227,15 @@ export function VoiceAssistantProvider({
     [handleGlobalAction, speak]
   );
 
+  // Чтобы useEffect не перезапускался при каждом изменении dispatchAction,
+  // используем Ref для актуальной функции обработки
+  const dispatchRef = useRef(dispatchAction);
+  useEffect(() => {
+    dispatchRef.current = dispatchAction;
+  }, [dispatchAction]);
+
   const setAssistantState = useCallback((state: AssistantScreenState) => {
     assistantStateRef.current = state;
-
     if (state.screen !== "study") {
       setRecognizedFinal(false);
       setRecognizedText("");
@@ -257,7 +262,19 @@ export function VoiceAssistantProvider({
     }
   }, []);
 
+  // ОСНОВНОЙ ЭФФЕКТ ИНИЦИАЛИЗАЦИИ
   useEffect(() => {
+    // ПРОВЕРКА СРЕДЫ: Если AssistantHost не найден, не инициализируем SDK
+    const isAssistantAvailable = typeof window !== 'undefined' && (window as any).AssistantHost;
+
+    if (!isAssistantAvailable) {
+      console.warn("AssistantHost не обнаружен. Салют-функции отключены (нормально для браузера).");
+      setMode("noop");
+      return; 
+    }
+
+    console.log("Инициализация Salute SDK...");
+
     const unsubscribeRecognition = subscribeCompactNativePanelRecognition((state) => {
       setRecognizedFinal(state.final);
       setRecognizedText(state.text);
@@ -270,7 +287,8 @@ export function VoiceAssistantProvider({
         state: buildAssistantState(assistantStateRef.current, customTopicsRef.current),
         topics: [...customTopicsRef.current, ...baseTopics],
       }),
-      onAction: (action) => dispatchAction(action),
+      // Используем Ref, чтобы обработчик всегда был актуальным без перезапуска эффекта
+      onAction: (action) => dispatchRef.current(action),
       onError: (event) => {
         const message = formatAssistantError(event);
         console.error("Salute assistant error:", message, event);
@@ -298,13 +316,17 @@ export function VoiceAssistantProvider({
     setDisabledReason(setup.disabledReason || "");
 
     return () => {
+      console.log("Удаление экземпляра ассистента");
       unsubscribeRecognition();
       clearSpeakingTimeout();
-      setup.assistant.close?.();
+      if (setup.assistant) {
+        setup.assistant.close?.();
+      }
       assistantRef.current = null;
       startListeningRef.current = () => false;
     };
-  }, [clearSpeakingTimeout, dispatchAction]);
+    // Убираем dispatchAction из зависимостей, чтобы не было цикла пересозданий
+  }, [clearSpeakingTimeout]);
 
   const contextValue = useMemo(() => ({
     mode, error, disabledReason, isSpeaking, recognizedFinal,
@@ -322,6 +344,7 @@ export function VoiceAssistantProvider({
             <div className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
             <span className="font-bold">Ошибка Salute:</span>
             <span className="opacity-90">{error}</span>
+            <button onClick={() => setError("")} className="ml-auto opacity-50 hover:opacity-100">✕</button>
           </div>
         </div>
       )}

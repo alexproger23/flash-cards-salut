@@ -262,19 +262,7 @@ export function VoiceAssistantProvider({
     }
   }, []);
 
-  // ОСНОВНОЙ ЭФФЕКТ ИНИЦИАЛИЗАЦИИ
   useEffect(() => {
-    // ПРОВЕРКА СРЕДЫ: Если AssistantHost не найден, не инициализируем SDK
-    const isAssistantAvailable = typeof window !== 'undefined' && (window as any).AssistantHost;
-
-    if (!isAssistantAvailable) {
-      console.warn("AssistantHost не обнаружен. Салют-функции отключены (нормально для браузера).");
-      setMode("noop");
-      return; 
-    }
-
-    console.log("Инициализация Salute SDK...");
-
     const unsubscribeRecognition = subscribeCompactNativePanelRecognition((state) => {
       setRecognizedFinal(state.final);
       setRecognizedText(state.text);
@@ -293,6 +281,11 @@ export function VoiceAssistantProvider({
         const message = formatAssistantError(event);
         console.error("Salute assistant error:", message, event);
         setError(message);
+      },
+      onRecognition: (state) => {
+        setRecognizedFinal(state.final);
+        setRecognizedText(state.text);
+        setRecognizedStatus(state.status);
       },
       onTts: (event) => {
         const state = getTtsState(event);
@@ -325,7 +318,6 @@ export function VoiceAssistantProvider({
       assistantRef.current = null;
       startListeningRef.current = () => false;
     };
-    // Убираем dispatchAction из зависимостей, чтобы не было цикла пересозданий
   }, [clearSpeakingTimeout]);
 
   const contextValue = useMemo(() => ({

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from "react";
-const API_URL = import.meta.env.VITE_API_URL;
+import { API_URL } from "../config";
 
 // Создаем свой тип пользователя вместо супабейзовского
 export interface User {

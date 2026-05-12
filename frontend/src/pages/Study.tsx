@@ -7,7 +7,7 @@ import { getTopicById, saveSessionResult } from "../data/flashcards";
 import { fetchUserData } from "../data/customTopics";
 import { FlashCard } from "./components/FlashCard";
 import { useVoiceActionHandler, useVoiceAssistant } from "../voice/VoiceAssistantProvider";
-import { getActionString } from "../voice/flashcardVoice";
+import { actionMatches, getActionString } from "../voice/flashcardVoice";
 
 const MAX_VOICE_ATTEMPTS = 3;
 
@@ -24,7 +24,6 @@ export function Study() {
   const {
     setAssistantState,
     startListening,
-    sendAssistantAction,
     speak,
     isSpeaking,
     recognizedText,
@@ -52,6 +51,20 @@ export function Study() {
     load();
   }, [topicId, navigate]);
 
+  useEffect(() => {
+    const card = topic?.cards?.[currentIndex];
+    if (!topic || !card) return;
+
+    setAssistantState({
+      screen: "study",
+      topicId: topic.id,
+      topicTitle: topic.title,
+      cardIndex: currentIndex,
+      cardFront: card.front,
+      cardBack: card.back,
+    });
+  }, [currentIndex, setAssistantState, topic]);
+
   // 2. АВТО-МИКРОФОН (Исправленная логика)
   useEffect(() => {
     // Включаем микрофон только если:
@@ -62,15 +75,13 @@ export function Study() {
       const timer = setTimeout(() => {
         try {
           startListening();
-          // Принудительно уведомляем сервер, что мы ждем голос
-          sendAssistantAction("run_recognition", { expect_response: true });
         } catch (e) {
           console.error("Mic activation failed", e);
         }
       }, 1000); // Задержка в 1 сек, чтобы WebSocket успел "продышаться"
       return () => clearTimeout(timer);
     }
-  }, [currentIndex, isSpeaking, recognizedStatus, topic]);
+  }, [currentIndex, isSpeaking, recognizedStatus, startListening, topic]);
 
   // 3. Навигация
   const moveNext = useCallback((didKnow: boolean) => {
@@ -105,7 +116,18 @@ export function Study() {
     const rawPhrase = getActionString(action, ["answer", "text", "spoken_answer", "value"]) || "";
     const phrase = normalizeText(cleanPhrase(rawPhrase));
 
-    if (!phrase) return true;
+    if (actionMatches(action, ["dont_know_card"])) {
+      setLastSpoken(rawPhrase || "Не знаю");
+      speak(`Это ${card.back}`, "reveal");
+      setIsFlipped(true);
+      return true;
+    }
+
+    if (!actionMatches(action, ["check_answer", "browser_text"]) && !phrase) {
+      return false;
+    }
+
+    if (!phrase) return false;
 
     if (phrase === "знаю" || phrase === "дальше") {
       moveNextRef.current(true);
@@ -203,11 +225,12 @@ export function Study() {
         {/* Индикатор микрофона */}
         <div className="shrink-0 space-y-3 pb-8">
           <motion.div 
+            onClick={startListening}
             animate={{ 
               borderColor: recognizedStatus === "listen" ? "var(--primary)" : "var(--border)",
               backgroundColor: recognizedStatus === "listen" ? "rgba(var(--primary-rgb), 0.05)" : "var(--card)"
             }}
-            className="rounded-3xl border-2 p-5 shadow-sm transition-colors"
+            className="rounded-3xl border-2 p-5 shadow-sm transition-colors cursor-pointer"
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">

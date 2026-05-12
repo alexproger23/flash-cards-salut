@@ -1,5 +1,9 @@
 import { createAssistant, createSmartappDebugger } from "@salutejs/client";
 import { renderCompactNativePanel, startCompactNativePanelListening } from "./compactNativePanel";
+import {
+  createBrowserSpeechAssistant,
+  type BrowserRecognitionState,
+} from "./browserSpeech";
 
 export type VoiceAction = {
   type: string;
@@ -24,9 +28,10 @@ type CreateVoiceAssistantOptions = {
   onError: (error: unknown) => void;
   onStart?: (event: unknown, initialData: unknown) => void;
   onTts?: (event: unknown) => void;
+  onRecognition?: (state: BrowserRecognitionState) => void;
 };
 
-export type VoiceAssistantMode = "debugger" | "canvas" | "noop";
+export type VoiceAssistantMode = "debugger" | "canvas" | "browser" | "noop";
 
 export type VoiceAssistantSetup = {
   assistant: VoiceAssistant;
@@ -130,6 +135,7 @@ export const createVoiceAssistant = ({
   onError,
   onStart,
   onTts,
+  onRecognition,
 }: CreateVoiceAssistantOptions): VoiceAssistantSetup => {
   const token = readEnv("VITE_SALUTE_TOKEN") || readEnv("REACT_APP_TOKEN");
   const smartapp = readEnv("VITE_SALUTE_SMARTAPP") || readEnv("REACT_APP_SMARTAPP");
@@ -139,35 +145,50 @@ export const createVoiceAssistant = ({
   let assistant: VoiceAssistant;
   let mode: VoiceAssistantMode;
   let disabledReason: string | undefined;
+  let startListening = startCompactNativePanelListening;
 
-  if (import.meta.env.DEV) {
-    if (token && smartapp) {
-      assistant = createSmartappDebugger({
-        token,
-        initPhrase: `Запусти ${smartapp}`,
-        getState,
-        getRecoveryState,
-        nativePanel: {
-          render: renderCompactNativePanel,
-          hideNativePanel: true,
-          defaultText: "Скажи команду или введи ее текстом",
-          screenshotMode: false,
-          tabIndex: -1,
-        },
-      });
-      mode = "debugger";
-    } else {
-      assistant = createNoopAssistant();
-      mode = "noop";
-      disabledReason = "Salute debugger disabled: set VITE_SALUTE_TOKEN and VITE_SALUTE_SMARTAPP.";
-      console.warn(disabledReason);
-    }
-  } else {
-    assistant = createAssistant({ 
-      getState, 
+  const hasAssistantHost = typeof window !== "undefined" && Boolean((window as any).AssistantHost);
+
+  if (import.meta.env.DEV && token && smartapp) {
+    assistant = createSmartappDebugger({
+      token,
+      initPhrase: `Запусти ${smartapp}`,
+      getState,
+      getRecoveryState,
+      nativePanel: {
+        render: renderCompactNativePanel,
+        hideNativePanel: true,
+        defaultText: "Скажи команду или введи ее текстом",
+        screenshotMode: false,
+        tabIndex: -1,
+      },
+    });
+    mode = "debugger";
+  } else if (hasAssistantHost) {
+    assistant = createAssistant({
+      getState,
       getRecoveryState,
     });
     mode = "canvas";
+  } else {
+    const browserSetup = createBrowserSpeechAssistant({
+      getState,
+      onAction,
+      onError,
+      onTts,
+      onRecognition: onRecognition || (() => {}),
+    });
+
+    assistant = browserSetup.assistant;
+    startListening = browserSetup.startListening;
+    mode = "browser";
+    disabledReason = browserSetup.disabledReason;
+
+    if (token && smartapp) {
+      console.info("AssistantHost не обнаружен. Используется браузерное распознавание речи.");
+    } else {
+      console.info("Salute debugger не настроен. Используется браузерное распознавание речи.");
+    }
   }
 
   assistant.on("start", (event) => {
@@ -205,6 +226,6 @@ export const createVoiceAssistant = ({
     assistant, 
     mode, 
     disabledReason, 
-    startListening: startCompactNativePanelListening 
+    startListening
   };
 };

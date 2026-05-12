@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import { useAuth } from "../context/AuthContext"; 
 import { Mail, Lock, LogIn, UserPlus, AlertCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-const API_URL = import.meta.env.VITE_API_URL;
+import { API_URL } from "../config";
 
 
 export function Auth() {

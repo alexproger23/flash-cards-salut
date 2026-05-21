@@ -193,7 +193,7 @@ export const createVoiceAssistant = ({
   
   const currentTheme = document.documentElement.classList.contains("dark") ? "dark" : "light";
 
-  let assistant: VoiceAssistant;
+  let assistant: VoiceAssistant | null = null;
   let mode: VoiceAssistantMode;
   let disabledReason: string | undefined;
   let startListening = startCompactNativePanelListening;
@@ -215,6 +215,9 @@ export const createVoiceAssistant = ({
     disabledReason = browserSetup.disabledReason;
   };
 
+  const hasUsableAssistant = (candidate: VoiceAssistant | null): candidate is VoiceAssistant =>
+    Boolean(candidate && typeof candidate.on === "function" && typeof candidate.sendData === "function");
+
   if (token && smartapp) {
     try {
       assistant = createSmartappDebugger({
@@ -230,7 +233,12 @@ export const createVoiceAssistant = ({
           tabIndex: 0,
         },
       });
-      mode = "debugger";
+      if (hasUsableAssistant(assistant)) {
+        mode = "debugger";
+      } else {
+        onError("Salute debugger не создал подключение. Используется браузерное распознавание.");
+        setupBrowserAssistant();
+      }
     } catch (error) {
       onError(error);
       setupBrowserAssistant();
@@ -249,6 +257,11 @@ export const createVoiceAssistant = ({
     } else {
       console.info("Salute debugger не настроен. Используется браузерное распознавание речи.");
     }
+  }
+
+  if (!hasUsableAssistant(assistant)) {
+    onError("Голосовой клиент не инициализировался. Используется браузерное распознавание.");
+    setupBrowserAssistant();
   }
 
   assistant.on("start", (event) => {

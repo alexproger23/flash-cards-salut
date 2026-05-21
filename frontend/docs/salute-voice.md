@@ -1,7 +1,7 @@
 # Salute voice integration
 
-Frontend uses `@salutejs/client`, but voice input is now active only on the study screen.
-The debug native panel is hidden; study start buttons request listening programmatically.
+Frontend uses `@salutejs/client` and accepts voice actions on the main app screens: library, study, tests, topic editor, card manager, auth, and results.
+The SmartApp Code scenario lives in `flashcards-smartapp-code/`.
 
 ## Local setup
 
@@ -19,29 +19,26 @@ After changing `.env`, restart `npm run dev`.
 ```json
 {
   "action": {
-    "action_id": "check_answer",
+    "action_id": "start_topic",
     "parameters": {
-      "answer": "spoken answer"
+      "number": 1,
+      "topic_id": "english-vocabulary"
     }
   }
 }
 ```
 
-`check_answer` compares `answer` with the current card back using a simple normalized exact match.
-The prefixes `ответ`, `мой ответ`, `я думаю`, and `думаю что` are stripped before comparison.
+The current screen state is exposed to Salute through `getState()`. Screens publish `item_selector.items`, so the scenario can resolve numeric commands like `тема номер 1`, `карточка номер 2`, and `вариант 3`.
 
-```json
-{
-  "action": {
-    "action_id": "dont_know_card",
-    "parameters": {}
-  }
-}
-```
+Main action ids:
 
-`dont_know_card` reveals the current answer.
-
-All other assistant actions are ignored unless the current frontend screen is `study`.
+- navigation: `go_home`, `go_back`, `open_auth`, `open_tests`;
+- topics: `new_topic`, `open_topic`, `start_topic`, `edit_topic`, `delete_topic`, `confirm`, `cancel`;
+- study: `check_answer`, `reveal_answer`, `dont_know_card`, `mark_known`, `mark_unknown`, `repeat_card`;
+- tests: `start_test`, `answer_test_option`, `answer_test_text`, `repeat_test`;
+- topic form: `set_topic_title`, `set_topic_description`, `set_topic_icon`, `enable_auto_generate`, `disable_auto_generate`, `set_cards_count`, `save_topic`;
+- cards: `add_card`, `delete_card`;
+- appearance: `set_theme`, `toggle_theme`.
 
 ## Voice feedback
 

@@ -1,6 +1,7 @@
 import { createAssistant, createSmartappDebugger } from "@salutejs/client";
 import { renderCompactNativePanel, startCompactNativePanelListening } from "./compactNativePanel";
 import {
+  buildBrowserAction,
   createBrowserSpeechAssistant,
   type BrowserRecognitionState,
 } from "./browserSpeech";
@@ -218,6 +219,21 @@ export const createVoiceAssistant = ({
   const hasUsableAssistant = (candidate: VoiceAssistant | null): candidate is VoiceAssistant =>
     Boolean(candidate && typeof candidate.on === "function" && typeof candidate.sendData === "function");
 
+  const renderDebuggerPanel: typeof renderCompactNativePanel = (props) => {
+    renderCompactNativePanel({
+      ...props,
+      sendText: (text) => {
+        const localAction = buildBrowserAction(text, getState());
+        if (localAction && localAction.type !== "browser_text") {
+          onAction(localAction, { type: "debugger_panel_text", text });
+          return;
+        }
+
+        props.sendText?.(text);
+      },
+    });
+  };
+
   if (token && smartapp) {
     try {
       assistant = createSmartappDebugger({
@@ -226,7 +242,7 @@ export const createVoiceAssistant = ({
         getState,
         getRecoveryState,
         nativePanel: {
-          render: renderCompactNativePanel,
+          render: renderDebuggerPanel,
           hideNativePanel: false,
           defaultText: "Скажи команду или введи ее текстом",
           screenshotMode: false,

@@ -60,7 +60,7 @@ const makeAction = (type: string, parameters: Record<string, unknown> = {}): Voi
   ...parameters,
 });
 
-const buildBrowserAction = (
+export const buildBrowserAction = (
   text: string,
   state: Record<string, unknown>
 ): VoiceAction | null => {
@@ -73,6 +73,10 @@ const buildBrowserAction = (
 
   if (["назад", "вернись", "обратно"].includes(normalized)) {
     return makeAction("go_back", { text, value: text });
+  }
+
+  if (["тесты", "режим теста", "открой тесты", "покажи тесты"].includes(normalized)) {
+    return makeAction("open_tests", { text, value: text });
   }
 
   if (

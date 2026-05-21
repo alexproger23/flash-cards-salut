@@ -1,8 +1,14 @@
-type NativePanelSuggestion = {
+type NativePanelAction = {
+  text?: string;
+  type?: string;
+  deep_link?: string;
+  server_action?: unknown;
+};
+
+type NativePanelSuggestion = string | {
   title?: string;
-  action?: {
-    text?: string;
-  };
+  action?: NativePanelAction;
+  actions?: NativePanelAction[];
 };
 
 type CompactNativePanelProps = {
@@ -11,6 +17,7 @@ type CompactNativePanelProps = {
   suggestions?: NativePanelSuggestion[];
   bubbleText?: string;
   sendText?: (text: string) => void;
+  sendServerAction?: (serverAction: unknown) => void;
   onListen?: () => void;
   onSubscribeListenStatus?: (handler: (status: string) => void) => (() => void) | void;
   onSubscribeHypotesis?: (handler: (text: string, last?: boolean) => void) => (() => void) | void;
@@ -327,12 +334,60 @@ const startPanelListening = (props: CompactNativePanelProps): boolean => {
   return true;
 };
 
+const getSuggestionTitle = (suggestion: NativePanelSuggestion): string => {
+  if (typeof suggestion === "string") return suggestion;
+  return suggestion.title || suggestion.action?.text || "";
+};
+
+const handlePanelAction = (props: CompactNativePanelProps, action: NativePanelAction) => {
+  if (typeof action.text !== "undefined") {
+    props.sendText?.(action.text);
+    return;
+  }
+
+  if (action.type === "deep_link" && action.deep_link) {
+    window.open(action.deep_link, "_blank");
+    return;
+  }
+
+  if (action.type === "server_action" && typeof action.server_action !== "undefined") {
+    props.sendServerAction?.(action.server_action);
+    return;
+  }
+
+  if (typeof action.server_action !== "undefined") {
+    props.sendServerAction?.(action.server_action);
+    return;
+  }
+
+  console.error("Unsupported suggestion action", action);
+};
+
+const handleSuggestion = (props: CompactNativePanelProps, suggestion: NativePanelSuggestion) => {
+  if (typeof suggestion === "string") {
+    props.sendText?.(suggestion);
+    return;
+  }
+
+  if (suggestion.action) {
+    handlePanelAction(props, suggestion.action);
+  }
+
+  if (suggestion.actions) {
+    suggestion.actions.forEach((action) => handlePanelAction(props, action));
+  }
+
+  if (!suggestion.action && !suggestion.actions?.length && suggestion.title) {
+    props.sendText?.(suggestion.title);
+  }
+};
+
 const render = (props: CompactNativePanelProps) => {
   const container = ensureRoot();
   const active = listenStatus === "listen";
   const suggestions = (props.suggestions || [])
-    .map((suggestion) => suggestion.action?.text || suggestion.title || "")
-    .filter(Boolean)
+    .map((suggestion) => ({ suggestion, title: getSuggestionTitle(suggestion) }))
+    .filter((item) => Boolean(item.title))
     .slice(0, 4);
 
   container.innerHTML = `
@@ -360,8 +415,8 @@ const render = (props: CompactNativePanelProps) => {
         suggestions.length
           ? `<div class="FlashcardsSalutePanel__suggests">${suggestions
               .map(
-                (suggestion) =>
-                  `<button class="FlashcardsSalutePanel__suggest" type="button">${escapeHtml(suggestion)}</button>`
+                ({ title }, index) =>
+                  `<button class="FlashcardsSalutePanel__suggest" type="button" data-index="${index}">${escapeHtml(title)}</button>`
               )
               .join("")}</div>`
           : ""
@@ -387,8 +442,9 @@ const render = (props: CompactNativePanelProps) => {
 
   suggestButtons.forEach((button) => {
     button.addEventListener("click", () => {
-      const text = button.textContent?.trim();
-      if (text) props.sendText?.(text);
+      const index = Number(button.dataset.index);
+      const suggestion = suggestions[index]?.suggestion;
+      if (suggestion) handleSuggestion(props, suggestion);
     });
   });
 };

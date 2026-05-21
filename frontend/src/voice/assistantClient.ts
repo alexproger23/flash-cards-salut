@@ -200,28 +200,7 @@ export const createVoiceAssistant = ({
 
   const hasAssistantHost = typeof window !== "undefined" && Boolean((window as any).AssistantHost);
 
-  if (token && smartapp) {
-    assistant = createSmartappDebugger({
-      token,
-      initPhrase: `Запусти ${smartapp}`,
-      getState,
-      getRecoveryState,
-      nativePanel: {
-        render: renderCompactNativePanel,
-        hideNativePanel: false,
-        defaultText: "Скажи команду или введи ее текстом",
-        screenshotMode: false,
-        tabIndex: 0,
-      },
-    });
-    mode = "debugger";
-  } else if (hasAssistantHost) {
-    assistant = createAssistant({
-      getState,
-      getRecoveryState,
-    });
-    mode = "canvas";
-  } else {
+  const setupBrowserAssistant = () => {
     const browserSetup = createBrowserSpeechAssistant({
       getState,
       onAction,
@@ -234,6 +213,36 @@ export const createVoiceAssistant = ({
     startListening = browserSetup.startListening;
     mode = "browser";
     disabledReason = browserSetup.disabledReason;
+  };
+
+  if (token && smartapp) {
+    try {
+      assistant = createSmartappDebugger({
+        token,
+        initPhrase: `Запусти ${smartapp}`,
+        getState,
+        getRecoveryState,
+        nativePanel: {
+          render: renderCompactNativePanel,
+          hideNativePanel: false,
+          defaultText: "Скажи команду или введи ее текстом",
+          screenshotMode: false,
+          tabIndex: 0,
+        },
+      });
+      mode = "debugger";
+    } catch (error) {
+      onError(error);
+      setupBrowserAssistant();
+    }
+  } else if (hasAssistantHost) {
+    assistant = createAssistant({
+      getState,
+      getRecoveryState,
+    });
+    mode = "canvas";
+  } else {
+    setupBrowserAssistant();
 
     if (token && smartapp) {
       console.info("AssistantHost не обнаружен. Используется браузерное распознавание речи.");

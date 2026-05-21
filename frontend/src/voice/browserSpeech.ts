@@ -1,4 +1,5 @@
 import type { VoiceAction, VoiceAssistant } from "./assistantClient";
+import { renderCompactNativePanel } from "./compactNativePanel";
 
 export type BrowserRecognitionState = {
   text: string;
@@ -158,9 +159,17 @@ export const createBrowserSpeechAssistant = ({
   let recognition: SpeechRecognitionLike | null = null;
   let isListening = false;
   let lastTranscript = "";
+  const listenStatusSubscribers = new Set<(status: string) => void>();
+  const hypothesisSubscribers = new Set<(text: string, last?: boolean) => void>();
 
   const emit = (event: string, payload: unknown) => {
     listeners.get(event)?.forEach((handler) => handler(payload));
+  };
+
+  const publishRecognition = (state: BrowserRecognitionState) => {
+    onRecognition(state);
+    listenStatusSubscribers.forEach((handler) => handler(state.status));
+    hypothesisSubscribers.forEach((handler) => handler(state.text, state.final));
   };
 
   const assistant: VoiceAssistant = {
@@ -203,6 +212,7 @@ export const createBrowserSpeechAssistant = ({
       recognition?.abort();
       recognition = null;
       isListening = false;
+      renderCompactNativePanel({ hideNativePanel: true });
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
         window.speechSynthesis.cancel();
       }
@@ -229,7 +239,7 @@ export const createBrowserSpeechAssistant = ({
 
     recognition.onstart = () => {
       isListening = true;
-      onRecognition({ text: "", final: false, status: "listen" });
+      publishRecognition({ text: "", final: false, status: "listen" });
     };
 
     recognition.onresult = (event) => {
@@ -247,7 +257,7 @@ export const createBrowserSpeechAssistant = ({
         lastTranscript = transcript;
       }
 
-      onRecognition({
+      publishRecognition({
         text: transcript || lastTranscript,
         final,
         status: "listen",
@@ -263,7 +273,7 @@ export const createBrowserSpeechAssistant = ({
 
     recognition.onerror = (event) => {
       isListening = false;
-      onRecognition({ text: lastTranscript, final: Boolean(lastTranscript), status: "idle" });
+      publishRecognition({ text: lastTranscript, final: Boolean(lastTranscript), status: "idle" });
 
       if (event.error && !["aborted", "no-speech"].includes(event.error)) {
         onError(event.message || `Ошибка распознавания речи: ${event.error}`);
@@ -272,7 +282,7 @@ export const createBrowserSpeechAssistant = ({
 
     recognition.onend = () => {
       isListening = false;
-      onRecognition({ text: lastTranscript, final: Boolean(lastTranscript), status: "idle" });
+      publishRecognition({ text: lastTranscript, final: Boolean(lastTranscript), status: "idle" });
     };
 
     try {
@@ -280,11 +290,38 @@ export const createBrowserSpeechAssistant = ({
       return true;
     } catch (error) {
       isListening = false;
-      onRecognition({ text: lastTranscript, final: Boolean(lastTranscript), status: "idle" });
+      publishRecognition({ text: lastTranscript, final: Boolean(lastTranscript), status: "idle" });
       onError(error);
       return false;
     }
   };
+
+  const sendPanelText = (text: string) => {
+    const action = buildBrowserAction(text, getState());
+    if (action) {
+      onAction(action, { type: "browser_panel_text", text });
+    }
+  };
+
+  renderCompactNativePanel({
+    hideNativePanel: false,
+    defaultText: "Скажи команду или введи ее текстом",
+    sendText: sendPanelText,
+    onListen: startListening,
+    onSubscribeListenStatus: (handler) => {
+      listenStatusSubscribers.add(handler);
+      return () => listenStatusSubscribers.delete(handler);
+    },
+    onSubscribeHypotesis: (handler) => {
+      hypothesisSubscribers.add(handler);
+      return () => hypothesisSubscribers.delete(handler);
+    },
+    suggestions: [
+      { title: "Покажи темы", action: { text: "покажи темы" } },
+      { title: "Создай тему", action: { text: "создай тему" } },
+      { title: "Режим теста", action: { text: "режим теста" } },
+    ],
+  });
 
   return {
     assistant,

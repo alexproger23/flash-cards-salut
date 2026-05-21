@@ -182,6 +182,10 @@ export function VoiceAssistantProvider({
         navigate(-1);
         return true;
       }
+      if (actionMatches(action, ["open_tests", "show_tests"])) {
+        navigate("/tests");
+        return true;
+      }
       if (actionMatches(action, ["new_topic", "open_new_topic_form"])) {
         navigate("/topics/new");
         return true;

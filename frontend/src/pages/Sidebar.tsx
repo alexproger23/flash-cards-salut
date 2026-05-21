@@ -28,6 +28,17 @@ export function Sidebar() {
     sendAssistantAction("set_theme", { theme: isDark ? "dark" : "light" });
   }, [isDark, sendAssistantAction]);
 
+  useEffect(() => {
+    const handleThemeChange = (event: Event) => {
+      const theme = (event as CustomEvent<{ theme?: string }>).detail?.theme;
+      if (theme === "dark") setIsDark(true);
+      if (theme === "light") setIsDark(false);
+    };
+
+    window.addEventListener("flashcards-theme-change", handleThemeChange);
+    return () => window.removeEventListener("flashcards-theme-change", handleThemeChange);
+  }, []);
+
   if (!user) return null;
 
   return (

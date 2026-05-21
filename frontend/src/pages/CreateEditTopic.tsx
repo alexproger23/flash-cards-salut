@@ -12,6 +12,7 @@ import { fetchUserData, generateCustomTopicCards, saveCustomTopic, type CustomTo
 import { useVoiceActionHandler, useVoiceAssistant } from "../voice/VoiceAssistantProvider";
 import {
   actionMatches,
+  getActionNumber,
   getActionString,
   getTopicDescriptionFromAction,
   getTopicTitleFromAction,
@@ -41,6 +42,40 @@ const ICON_OPTIONS = [
   { id: "SpellCheck", Icon: SpellCheck },
   { id: "Ghost", Icon: Ghost },
 ];
+
+const ICON_VOICE_ALIASES: Record<string, string> = {
+  книга: "BookText",
+  учебник: "BookText",
+  мозг: "Brain",
+  язык: "Languages",
+  языки: "Languages",
+  ракета: "Rocket",
+  цель: "Target",
+  микроскоп: "Microscope",
+  идея: "Lightbulb",
+  лампочка: "Lightbulb",
+  калькулятор: "Calculator",
+  глобус: "Globe",
+  палитра: "Palette",
+  музыка: "Music",
+  кубок: "Trophy",
+  лист: "Leaf",
+  химия: "TestTube",
+  днк: "Dna",
+  история: "Landmark",
+  линейка: "Ruler",
+  театр: "Theater",
+  правописание: "SpellCheck",
+};
+
+const normalizeVoiceText = (value: string): string =>
+  value.trim().toLowerCase().replace(/ё/g, "е").replace(/\s+/g, " ");
+
+const resolveIconId = (value: string): string => {
+  const normalized = normalizeVoiceText(value);
+  const byId = ICON_OPTIONS.find((option) => option.id.toLowerCase() === normalized);
+  return byId?.id || ICON_VOICE_ALIASES[normalized] || "";
+};
 
 interface InputProps {
   label: string;
@@ -191,7 +226,43 @@ export function CreateEditTopic() {
         setDescription(getTopicDescriptionFromAction(action) || getActionString(action, ["value"]));
         return true;
       }
-      if (actionMatches(action, ["create_topic", "save_topic"])) {
+      if (actionMatches(action, ["set_topic_icon", "select_icon"])) {
+        const nextIcon = resolveIconId(getActionString(action, ["icon", "emoji", "value", "name"]));
+        if (nextIcon) {
+          setIconId(nextIcon);
+        } else {
+          speak("Не нашла такую иконку.", "icon_not_found");
+        }
+        return true;
+      }
+      if (actionMatches(action, ["enable_auto_generate"])) {
+        if (!isEditing) {
+          setAutoGenerate(true);
+          setError("");
+          speak("Автогенерация включена.", "auto_generate_enabled");
+        }
+        return true;
+      }
+      if (actionMatches(action, ["disable_auto_generate"])) {
+        if (!isEditing) {
+          setAutoGenerate(false);
+          setError("");
+          speak("Автогенерация выключена.", "auto_generate_disabled");
+        }
+        return true;
+      }
+      if (actionMatches(action, ["set_cards_count"])) {
+        const nextCount = getActionNumber(action, ["count", "cards_count", "cardsCount", "value", "number"]);
+        if (nextCount) {
+          setCardsCount(Math.min(30, Math.max(5, nextCount)));
+        }
+        return true;
+      }
+      if (actionMatches(action, ["cancel_topic_form"])) {
+        navigate(isEditing && topicId ? `/topics/${topicId}` : "/");
+        return true;
+      }
+      if (actionMatches(action, ["create_topic", "save_topic", "confirm"])) {
         const nextTitle = getTopicTitleFromAction(action) || title;
         const nextDescription = getTopicDescriptionFromAction(action) || description;
         saveTopic(nextTitle, nextDescription, iconId);
@@ -199,7 +270,7 @@ export function CreateEditTopic() {
       }
       return false;
     },
-    [description, iconId, isEditing, navigate, speak, title, topicId, existingTopic], // Добавили existingTopic в зависимости
+    [description, iconId, isEditing, navigate, speak, title, topicId, existingTopic],
     20
   );
 

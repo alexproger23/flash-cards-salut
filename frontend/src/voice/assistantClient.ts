@@ -52,10 +52,59 @@ const createNoopAssistant = (): VoiceAssistant => ({
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-const readEnv = (key: string): string => {
+const readBuildEnv = (key: string): string => {
+  if (!import.meta.env.DEV) return "";
   const value = (import.meta.env as Record<string, unknown>)[key];
   return typeof value === "string" ? value.trim() : "";
 };
+
+const readStorageValue = (keys: string[]): string => {
+  if (typeof window === "undefined") return "";
+
+  for (const key of keys) {
+    const value = window.localStorage.getItem(key);
+    if (value?.trim()) return value.trim();
+  }
+
+  return "";
+};
+
+const persistDebuggerSearchParams = () => {
+  if (typeof window === "undefined") return;
+
+  const url = new URL(window.location.href);
+  const token = url.searchParams.get("saluteToken") || url.searchParams.get("salute_token");
+  const smartapp = url.searchParams.get("saluteSmartapp") || url.searchParams.get("salute_smartapp");
+  let changed = false;
+
+  if (token?.trim()) {
+    window.localStorage.setItem("flashcards.salute.token", token.trim());
+    url.searchParams.delete("saluteToken");
+    url.searchParams.delete("salute_token");
+    changed = true;
+  }
+
+  if (smartapp?.trim()) {
+    window.localStorage.setItem("flashcards.salute.smartapp", smartapp.trim());
+    url.searchParams.delete("saluteSmartapp");
+    url.searchParams.delete("salute_smartapp");
+    changed = true;
+  }
+
+  if (changed) {
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  }
+};
+
+const readSaluteToken = (): string =>
+  readBuildEnv("VITE_SALUTE_TOKEN") ||
+  readBuildEnv("REACT_APP_TOKEN") ||
+  readStorageValue(["flashcards.salute.token", "VITE_SALUTE_TOKEN", "REACT_APP_TOKEN"]);
+
+const readSaluteSmartapp = (): string =>
+  readBuildEnv("VITE_SALUTE_SMARTAPP") ||
+  readBuildEnv("REACT_APP_SMARTAPP") ||
+  readStorageValue(["flashcards.salute.smartapp", "VITE_SALUTE_SMARTAPP", "REACT_APP_SMARTAPP"]);
 
 const normalizeAssistantAction = (action: unknown): VoiceAction | null => {
   if (!isRecord(action)) return null;
@@ -137,8 +186,10 @@ export const createVoiceAssistant = ({
   onTts,
   onRecognition,
 }: CreateVoiceAssistantOptions): VoiceAssistantSetup => {
-  const token = readEnv("VITE_SALUTE_TOKEN") || readEnv("REACT_APP_TOKEN");
-  const smartapp = readEnv("VITE_SALUTE_SMARTAPP") || readEnv("REACT_APP_SMARTAPP");
+  persistDebuggerSearchParams();
+
+  const token = readSaluteToken();
+  const smartapp = readSaluteSmartapp();
   
   const currentTheme = document.documentElement.classList.contains("dark") ? "dark" : "light";
 
@@ -149,7 +200,7 @@ export const createVoiceAssistant = ({
 
   const hasAssistantHost = typeof window !== "undefined" && Boolean((window as any).AssistantHost);
 
-  if (import.meta.env.DEV && token && smartapp) {
+  if (token && smartapp) {
     assistant = createSmartappDebugger({
       token,
       initPhrase: `Запусти ${smartapp}`,
@@ -157,10 +208,10 @@ export const createVoiceAssistant = ({
       getRecoveryState,
       nativePanel: {
         render: renderCompactNativePanel,
-        hideNativePanel: true,
+        hideNativePanel: false,
         defaultText: "Скажи команду или введи ее текстом",
         screenshotMode: false,
-        tabIndex: -1,
+        tabIndex: 0,
       },
     });
     mode = "debugger";

@@ -1,9 +1,11 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { useAuth } from "../context/AuthContext"; 
 import { Mail, Lock, LogIn, UserPlus, AlertCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { API_URL } from "../config";
+import { useVoiceActionHandler, useVoiceAssistant } from "../voice/VoiceAssistantProvider";
+import { actionMatches } from "../voice/flashcardVoice";
 
 
 export function Auth() {
@@ -15,9 +17,23 @@ export function Auth() {
   
   const navigate = useNavigate();
   const { login } = useAuth(); 
+  const { setAssistantState, speak } = useVoiceAssistant();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  useEffect(() => {
+    setAssistantState({
+      screen: "auth",
+      mode: isLogin ? "login" : "register",
+      hasEmail: Boolean(email.trim()),
+      hasPassword: Boolean(password.trim()),
+    });
+  }, [email, isLogin, password, setAssistantState]);
+
+  const submitAuth = useCallback(async () => {
+    if (!email.trim() || !password.trim()) {
+      speak("Заполните почту и пароль.", "auth_fields_missing");
+      return;
+    }
+
     setLoading(true);
     setErrorMsg(null);
 
@@ -55,7 +71,36 @@ export function Auth() {
     } finally {
       setLoading(false);
     }
+  }, [email, isLogin, login, navigate, password, speak]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await submitAuth();
   };
+
+  useVoiceActionHandler(
+    (action) => {
+      if (actionMatches(action, ["open_auth", "show_login", "login"])) {
+        setIsLogin(true);
+        if (email.trim() && password.trim()) void submitAuth();
+        return true;
+      }
+
+      if (actionMatches(action, ["show_register", "register"])) {
+        setIsLogin(false);
+        return true;
+      }
+
+      if (actionMatches(action, ["submit_auth", "confirm"])) {
+        void submitAuth();
+        return true;
+      }
+
+      return false;
+    },
+    [email, password, submitAuth],
+    20
+  );
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">

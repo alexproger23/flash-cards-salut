@@ -12,7 +12,12 @@ import { actionMatches, getActionString } from "../voice/flashcardVoice";
 const MAX_VOICE_ATTEMPTS = 3;
 
 const cleanPhrase = (text: string): string => {
-  return text.replace(/запусти/i, "").replace(/список задач/i, "").replace(/открой/i, "").trim();
+  return text
+    .replace(/запусти/i, "")
+    .replace(/список задач/i, "")
+    .replace(/открой/i, "")
+    .replace(/^(ответ|мой ответ|я думаю|думаю что|думаю)\s+/i, "")
+    .trim();
 };
 
 const normalizeText = (t: string) => t.toLowerCase().replace(/ё/g, "е").replace(/[.,!?-]/g, "").trim();
@@ -62,6 +67,12 @@ export function Study() {
       cardIndex: currentIndex,
       cardFront: card.front,
       cardBack: card.back,
+      currentCard: {
+        number: currentIndex + 1,
+        id: card.id,
+        front: card.front,
+        back: card.back,
+      },
     });
   }, [currentIndex, setAssistantState, topic]);
 
@@ -116,7 +127,22 @@ export function Study() {
     const rawPhrase = getActionString(action, ["answer", "text", "spoken_answer", "value"]) || "";
     const phrase = normalizeText(cleanPhrase(rawPhrase));
 
-    if (actionMatches(action, ["dont_know_card"])) {
+    if (actionMatches(action, ["mark_known", "known_card", "next_card"])) {
+      moveNextRef.current(true);
+      return true;
+    }
+
+    if (actionMatches(action, ["mark_unknown", "unknown_card", "skip_card"])) {
+      moveNextRef.current(false);
+      return true;
+    }
+
+    if (actionMatches(action, ["repeat_card"])) {
+      speak(String(card.front), "repeat_card");
+      return true;
+    }
+
+    if (actionMatches(action, ["dont_know_card", "reveal_answer", "show_answer", "flip_card"])) {
       setLastSpoken(rawPhrase || "Не знаю");
       speak(`Это ${card.back}`, "reveal");
       setIsFlipped(true);
@@ -134,7 +160,7 @@ export function Study() {
       return true;
     }
     
-    if (phrase === "не знаю" || phrase.includes("ответ")) {
+    if (phrase === "не знаю" || phrase.includes("покажи ответ")) {
       speak(`Это ${card.back}`, "reveal");
       setIsFlipped(true);
       return true;

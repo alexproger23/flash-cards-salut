@@ -18,6 +18,7 @@ import { subscribeCompactNativePanelRecognition } from "./compactNativePanel";
 import {
   actionMatches,
   findTopicFromAction,
+  getActionString,
 } from "./flashcardVoice";
 import { fetchUserData, type CustomTopic } from "../data/customTopics";
 import { topics as baseTopics } from "../data/flashcards";
@@ -159,6 +160,17 @@ export function VoiceAssistantProvider({
     []
   );
 
+  const applyTheme = useCallback(
+    (theme: "light" | "dark") => {
+      const root = window.document.documentElement;
+      root.classList.toggle("dark", theme === "dark");
+      localStorage.setItem("theme", theme);
+      window.dispatchEvent(new CustomEvent("flashcards-theme-change", { detail: { theme } }));
+      sendAssistantAction("set_theme", { theme });
+    },
+    [sendAssistantAction]
+  );
+
   const startListening = useCallback((): boolean => {
     console.log("Попытка включить микрофон...");
     return startListeningRef.current();
@@ -182,9 +194,31 @@ export function VoiceAssistantProvider({
         navigate(-1);
         return true;
       }
+      if (actionMatches(action, ["open_auth", "login", "show_auth"])) {
+        navigate("/auth");
+        return true;
+      }
+      if (actionMatches(action, ["open_tests", "show_tests"])) {
+        navigate("/tests");
+        return true;
+      }
       if (actionMatches(action, ["new_topic", "open_new_topic_form"])) {
         navigate("/topics/new");
         return true;
+      }
+
+      if (actionMatches(action, ["set_theme", "toggle_theme"])) {
+        if (actionMatches(action, ["toggle_theme"])) {
+          const nextTheme = document.documentElement.classList.contains("dark") ? "light" : "dark";
+          applyTheme(nextTheme);
+          return true;
+        }
+
+        const requestedTheme = getActionString(action, ["theme", "value"]);
+        if (requestedTheme === "dark" || requestedTheme === "light") {
+          applyTheme(requestedTheme);
+          return true;
+        }
       }
       
       if (actionMatches(action, ["open_topic", "start_topic", "start_study"])) {
@@ -198,10 +232,39 @@ export function VoiceAssistantProvider({
         navigate(getTopicPath(topic, studyMode));
         return true;
       }
+
+      if (actionMatches(action, ["start_test"])) {
+        const availableTopics = [...customTopicsRef.current, ...baseTopics];
+        const topic = await findTopicFromAction(action, availableTopics);
+        if (!topic) {
+          navigate("/tests");
+          return true;
+        }
+        navigate("/tests", { state: { autoStartTopicId: topic.id } });
+        return true;
+      }
+
+      if (actionMatches(action, ["edit_topic"])) {
+        const availableTopics = [...customTopicsRef.current, ...baseTopics];
+        const topic = await findTopicFromAction(action, availableTopics);
+        if (!topic) {
+          speak("Не нашла такую тему.", "topic_not_found");
+          return true;
+        }
+
+        const isBaseTopic = baseTopics.some((baseTopic) => baseTopic.id === topic.id);
+        if (isBaseTopic) {
+          speak("Стандартную тему можно только тренировать или пройти в тесте.", "base_topic_edit_blocked");
+          return true;
+        }
+
+        navigate(`/topics/${topic.id}`);
+        return true;
+      }
       
       return false;
     },
-    [navigate, speak]
+    [applyTheme, navigate, speak]
   );
 
   const dispatchAction = useCallback(

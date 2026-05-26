@@ -5,6 +5,10 @@ require: js/getters.js
 require: js/reply.js
 require: js/actions.js
 
+require: sc/navigation.sc
+require: sc/topics.sc
+require: sc/forms.sc
+require: sc/tests.sc
 require: sc/study.sc
 require: sc/frontendEvents.sc
 
@@ -19,8 +23,9 @@ theme: /
         q!: (запусти | открой | вруби) flashcards
         script:
             addSuggestions([
-                "Ответ example",
-                "Я не знаю"
+                "Покажи темы",
+                "Создать тему",
+                "Режим теста"
             ], $context);
         a: Открываю карточки.
 
@@ -29,7 +34,8 @@ theme: /
         script:
             log("fallback: " + JSON.stringify($context));
             addSuggestions([
-                "Ответ example",
-                "Я не знаю"
+                "Покажи темы",
+                "Создать тему",
+                "Режим теста"
             ], $context);
-        a: Повторите ответ.
+        a: Не поняла команду.

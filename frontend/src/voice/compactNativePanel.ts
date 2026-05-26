@@ -1,8 +1,14 @@
-type NativePanelSuggestion = {
+type NativePanelAction = {
+  text?: string;
+  type?: string;
+  deep_link?: string;
+  server_action?: unknown;
+};
+
+type NativePanelSuggestion = string | {
   title?: string;
-  action?: {
-    text?: string;
-  };
+  action?: NativePanelAction;
+  actions?: NativePanelAction[];
 };
 
 type CompactNativePanelProps = {
@@ -11,6 +17,7 @@ type CompactNativePanelProps = {
   suggestions?: NativePanelSuggestion[];
   bubbleText?: string;
   sendText?: (text: string) => void;
+  sendServerAction?: (serverAction: unknown) => void;
   onListen?: () => void;
   onSubscribeListenStatus?: (handler: (status: string) => void) => (() => void) | void;
   onSubscribeHypotesis?: (handler: (text: string, last?: boolean) => void) => (() => void) | void;
@@ -22,12 +29,43 @@ type RecognitionState = {
   status: string;
 };
 
+type SpeechRecognitionResultLike = {
+  isFinal: boolean;
+  [index: number]: { transcript: string };
+};
+
+type SpeechRecognitionEventLike = {
+  resultIndex: number;
+  results: {
+    length: number;
+    [index: number]: SpeechRecognitionResultLike;
+  };
+};
+
+type SpeechRecognitionLike = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onstart: (() => void) | null;
+  onend: (() => void) | null;
+  onerror: ((event: { error?: string; message?: string }) => void) | null;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  start: () => void;
+  abort: () => void;
+};
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+
 let root: HTMLDivElement | null = null;
 let unsubscribeListen: (() => void) | void;
 let unsubscribeHypotesis: (() => void) | void;
 let listenStatus = "idle";
 let hypothesis = "";
 let currentListenHandler: (() => void) | undefined;
+let currentPanelProps: CompactNativePanelProps | null = null;
+let fallbackRecognition: SpeechRecognitionLike | null = null;
+let fallbackTimer: number | null = null;
 const recognitionSubscribers = new Set<(state: RecognitionState) => void>();
 
 const getRecognitionState = (final = false): RecognitionState => ({
@@ -182,15 +220,174 @@ const getStatusText = (bubbleText?: string): string => {
   if (hypothesis) return hypothesis;
   if (bubbleText) return bubbleText;
   if (listenStatus === "listen") return "Слушаю...";
+  if (listenStatus === "error") return "Микрофон недоступен";
   return "Готова к команде";
+};
+
+const getSpeechRecognitionConstructor = (): SpeechRecognitionConstructor | null => {
+  const browserWindow = window as Window &
+    typeof globalThis & {
+      SpeechRecognition?: SpeechRecognitionConstructor;
+      webkitSpeechRecognition?: SpeechRecognitionConstructor;
+    };
+
+  return browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition || null;
+};
+
+const updateFallbackState = (props: CompactNativePanelProps, final = false) => {
+  notifyRecognitionSubscribers(final);
+  if (!props.hideNativePanel) {
+    render(props);
+  }
+};
+
+const startBrowserFallbackListening = (props: CompactNativePanelProps): boolean => {
+  const SpeechRecognition = getSpeechRecognitionConstructor();
+  if (!SpeechRecognition) {
+    listenStatus = "error";
+    hypothesis = "Браузер не поддерживает распознавание речи";
+    updateFallbackState(props, true);
+    return false;
+  }
+
+  let lastTranscript = "";
+  let sent = false;
+
+  fallbackRecognition?.abort();
+  fallbackRecognition = new SpeechRecognition();
+  fallbackRecognition.lang = "ru-RU";
+  fallbackRecognition.continuous = false;
+  fallbackRecognition.interimResults = true;
+  fallbackRecognition.maxAlternatives = 1;
+
+  fallbackRecognition.onstart = () => {
+    listenStatus = "listen";
+    hypothesis = "";
+    updateFallbackState(props, false);
+  };
+
+  fallbackRecognition.onresult = (event) => {
+    let transcript = "";
+    let final = false;
+
+    for (let index = event.resultIndex; index < event.results.length; index += 1) {
+      const result = event.results[index];
+      transcript += result[0]?.transcript ?? "";
+      final ||= result.isFinal;
+    }
+
+    transcript = transcript.trim();
+    if (transcript) {
+      lastTranscript = transcript;
+      hypothesis = transcript;
+    }
+
+    updateFallbackState(props, final);
+
+    if (final && lastTranscript && !sent) {
+      sent = true;
+      props.sendText?.(lastTranscript);
+    }
+  };
+
+  fallbackRecognition.onerror = (event) => {
+    listenStatus = "error";
+    hypothesis = event.message || (event.error ? `Ошибка микрофона: ${event.error}` : "Ошибка микрофона");
+    updateFallbackState(props, true);
+  };
+
+  fallbackRecognition.onend = () => {
+    if (lastTranscript && !sent) {
+      sent = true;
+      props.sendText?.(lastTranscript);
+    }
+
+    listenStatus = "idle";
+    updateFallbackState(props, Boolean(lastTranscript));
+  };
+
+  try {
+    fallbackRecognition.start();
+    return true;
+  } catch (error) {
+    listenStatus = "error";
+    hypothesis = error instanceof Error ? error.message : "Не удалось включить микрофон";
+    updateFallbackState(props, true);
+    return false;
+  }
+};
+
+const startPanelListening = (props: CompactNativePanelProps): boolean => {
+  props.onListen?.();
+
+  if (fallbackTimer !== null) {
+    window.clearTimeout(fallbackTimer);
+  }
+
+  fallbackTimer = window.setTimeout(() => {
+    fallbackTimer = null;
+    if (listenStatus !== "listen") {
+      startBrowserFallbackListening(props);
+    }
+  }, 700);
+
+  return true;
+};
+
+const getSuggestionTitle = (suggestion: NativePanelSuggestion): string => {
+  if (typeof suggestion === "string") return suggestion;
+  return suggestion.title || suggestion.action?.text || "";
+};
+
+const handlePanelAction = (props: CompactNativePanelProps, action: NativePanelAction) => {
+  if (typeof action.text !== "undefined") {
+    props.sendText?.(action.text);
+    return;
+  }
+
+  if (action.type === "deep_link" && action.deep_link) {
+    window.open(action.deep_link, "_blank");
+    return;
+  }
+
+  if (action.type === "server_action" && typeof action.server_action !== "undefined") {
+    props.sendServerAction?.(action.server_action);
+    return;
+  }
+
+  if (typeof action.server_action !== "undefined") {
+    props.sendServerAction?.(action.server_action);
+    return;
+  }
+
+  console.error("Unsupported suggestion action", action);
+};
+
+const handleSuggestion = (props: CompactNativePanelProps, suggestion: NativePanelSuggestion) => {
+  if (typeof suggestion === "string") {
+    props.sendText?.(suggestion);
+    return;
+  }
+
+  if (suggestion.action) {
+    handlePanelAction(props, suggestion.action);
+  }
+
+  if (suggestion.actions) {
+    suggestion.actions.forEach((action) => handlePanelAction(props, action));
+  }
+
+  if (!suggestion.action && !suggestion.actions?.length && suggestion.title) {
+    props.sendText?.(suggestion.title);
+  }
 };
 
 const render = (props: CompactNativePanelProps) => {
   const container = ensureRoot();
   const active = listenStatus === "listen";
   const suggestions = (props.suggestions || [])
-    .map((suggestion) => suggestion.action?.text || suggestion.title || "")
-    .filter(Boolean)
+    .map((suggestion) => ({ suggestion, title: getSuggestionTitle(suggestion) }))
+    .filter((item) => Boolean(item.title))
     .slice(0, 4);
 
   container.innerHTML = `
@@ -218,8 +415,8 @@ const render = (props: CompactNativePanelProps) => {
         suggestions.length
           ? `<div class="FlashcardsSalutePanel__suggests">${suggestions
               .map(
-                (suggestion) =>
-                  `<button class="FlashcardsSalutePanel__suggest" type="button">${escapeHtml(suggestion)}</button>`
+                ({ title }, index) =>
+                  `<button class="FlashcardsSalutePanel__suggest" type="button" data-index="${index}">${escapeHtml(title)}</button>`
               )
               .join("")}</div>`
           : ""
@@ -233,7 +430,7 @@ const render = (props: CompactNativePanelProps) => {
     container.querySelectorAll<HTMLButtonElement>(".FlashcardsSalutePanel__suggest")
   );
 
-  mic?.addEventListener("click", () => props.onListen?.());
+  mic?.addEventListener("click", () => startPanelListening(props));
 
   input?.addEventListener("keydown", (event) => {
     if (event.key !== "Enter") return;
@@ -245,14 +442,16 @@ const render = (props: CompactNativePanelProps) => {
 
   suggestButtons.forEach((button) => {
     button.addEventListener("click", () => {
-      const text = button.textContent?.trim();
-      if (text) props.sendText?.(text);
+      const index = Number(button.dataset.index);
+      const suggestion = suggestions[index]?.suggestion;
+      if (suggestion) handleSuggestion(props, suggestion);
     });
   });
 };
 
 export const renderCompactNativePanel = (props: CompactNativePanelProps) => {
   currentListenHandler = props.onListen;
+  currentPanelProps = props;
 
   unsubscribeListen?.();
   unsubscribeHypotesis?.();
@@ -290,11 +489,15 @@ export const renderCompactNativePanel = (props: CompactNativePanelProps) => {
 };
 
 export const startCompactNativePanelListening = (): boolean => {
-  if (!currentListenHandler) {
+  if (!currentListenHandler && !currentPanelProps) {
     return false;
   }
 
-  currentListenHandler();
+  if (currentPanelProps) {
+    startPanelListening(currentPanelProps);
+  } else {
+    currentListenHandler?.();
+  }
   return true;
 };
 

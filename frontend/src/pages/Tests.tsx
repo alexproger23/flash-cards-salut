@@ -14,6 +14,13 @@ import { fetchUserData } from "../data/customTopics";
 import { TopicIcon } from "./components/TopicIcon";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
+import { useVoiceActionHandler, useVoiceAssistant } from "../voice/VoiceAssistantProvider";
+import {
+  actionMatches,
+  findTopicFromAction,
+  getActionNumber,
+  getActionString,
+} from "../voice/flashcardVoice";
 
 interface Question {
   id: string;
@@ -22,10 +29,19 @@ interface Question {
   options: string[];
 }
 
+const normalizeVoiceText = (value: string): string =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/[.,!?;:()[\]{}"«»]/g, "")
+    .replace(/\s+/g, " ");
+
 export function Tests() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated } = useAuth();
+  const { setAssistantState, speak } = useVoiceAssistant();
   
   const [step, setStep] = useState<"select" | "quiz" | "result">("select");
   const [allTopics, setAllTopics] = useState<any[]>([]);
@@ -120,9 +136,15 @@ export function Tests() {
     loadTopics();
   }, [isAuthenticated, location.state, startQuiz]);
 
-  const handleAnswer = (answer: string) => {
+  const handleAnswer = useCallback((answer: string) => {
+    const question = questions[currentIndex];
+    if (!question) return;
+
     if (answer === questions[currentIndex].correctAnswer) {
       setScore(s => s + 1);
+      speak("Правильно.", "test_answer_correct");
+    } else {
+      speak(`Неверно. Правильный ответ: ${question.correctAnswer}`, "test_answer_wrong");
     }
 
     if (currentIndex + 1 < questions.length) {
@@ -130,7 +152,120 @@ export function Tests() {
     } else {
       setStep("result");
     }
-  };
+  }, [currentIndex, questions, speak]);
+
+  useEffect(() => {
+    const topicItems = allTopics.map((topic, index) => ({
+      number: index + 1,
+      id: topic.id,
+      title: topic.title,
+      cardsCount: topic.cards?.length || 0,
+    }));
+
+    if (step === "select") {
+      setAssistantState({
+        screen: "tests_select",
+        topics: topicItems,
+        item_selector: {
+          type: "topics",
+          items: topicItems,
+        },
+      });
+      return;
+    }
+
+    if (step === "quiz") {
+      const question = questions[currentIndex];
+      const options = question?.options.map((option, index) => ({
+        number: index + 1,
+        id: String(index + 1),
+        title: option,
+        value: option,
+      })) || [];
+
+      setAssistantState({
+        screen: "test_quiz",
+        topicId: selectedTopic?.id,
+        topicTitle: selectedTopic?.title,
+        questionIndex: currentIndex,
+        question: question?.term,
+        options,
+        item_selector: {
+          type: "options",
+          items: options,
+        },
+      });
+      return;
+    }
+
+    setAssistantState({
+      screen: "test_results",
+      topicId: selectedTopic?.id,
+      topicTitle: selectedTopic?.title,
+      score,
+      total: questions.length,
+    });
+  }, [allTopics, currentIndex, questions, score, selectedTopic, setAssistantState, step]);
+
+  useVoiceActionHandler(
+    (action) => {
+      if (step === "select" && actionMatches(action, ["start_test", "open_topic", "start_topic"])) {
+        void (async () => {
+          const topic = await findTopicFromAction(action, allTopics);
+          if (!topic) {
+            speak("Не нашла такую тему для теста.", "topic_not_found");
+            return;
+          }
+          startQuiz(topic);
+        })();
+        return true;
+      }
+
+      if (step === "quiz" && actionMatches(action, ["answer_test_option", "answer_option"])) {
+        const optionNumber = getActionNumber(action, ["option_number", "optionNumber", "number"]);
+        const option = optionNumber ? questions[currentIndex]?.options[optionNumber - 1] : undefined;
+        if (!option) {
+          speak("Такого варианта нет.", "option_not_found");
+          return true;
+        }
+        handleAnswer(option);
+        return true;
+      }
+
+      if (
+        step === "quiz" &&
+        actionMatches(action, ["answer_test_text", "check_answer", "browser_text"])
+      ) {
+        const answer = getActionString(action, ["answer", "text", "value"]);
+        const normalizedAnswer = normalizeVoiceText(answer);
+        const option = questions[currentIndex]?.options.find(
+          (candidate) => normalizeVoiceText(candidate) === normalizedAnswer
+        );
+
+        if (!option) {
+          speak("Не нашла такой вариант ответа.", "option_not_found");
+          return true;
+        }
+
+        handleAnswer(option);
+        return true;
+      }
+
+      if (step === "quiz" && actionMatches(action, ["go_back", "cancel", "cancel_test"])) {
+        setStep("select");
+        return true;
+      }
+
+      if (step === "result" && actionMatches(action, ["repeat_test", "start_test"])) {
+        if (selectedTopic) startQuiz(selectedTopic);
+        return true;
+      }
+
+      return false;
+    },
+    [allTopics, currentIndex, handleAnswer, questions, selectedTopic, speak, startQuiz, step],
+    20
+  );
 
   if (isLoading) {
     return (

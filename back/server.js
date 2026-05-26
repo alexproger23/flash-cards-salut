@@ -1,11 +1,65 @@
 ﻿const express = require('express');
 const cors = require('cors');
-const sqlite3 = require('sqlite3').verbose();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config(); // Загружаем .env в самом начале
+
+const createDatabase = (dbPath) => {
+  try {
+    const sqlite3 = require('sqlite3').verbose();
+    return new sqlite3.Database(dbPath);
+  } catch (error) {
+    if (error.code !== 'MODULE_NOT_FOUND') {
+      throw error;
+    }
+
+    const { DatabaseSync } = require('node:sqlite');
+    const database = new DatabaseSync(dbPath);
+    const asArray = (params) => Array.isArray(params) ? params : [];
+
+    return {
+      serialize(callback) {
+        callback();
+      },
+      run(sql, params, callback) {
+        const actualCallback = typeof params === 'function' ? params : callback;
+        const actualParams = typeof params === 'function' ? [] : asArray(params);
+        try {
+          if (actualParams.length === 0) {
+            database.exec(sql);
+          } else {
+            database.prepare(sql).run(...actualParams);
+          }
+          actualCallback?.(null);
+        } catch (err) {
+          if (actualCallback) {
+            actualCallback(err);
+          } else {
+            throw err;
+          }
+        }
+      },
+      get(sql, params, callback) {
+        try {
+          const row = database.prepare(sql).get(...asArray(params));
+          callback(null, row);
+        } catch (err) {
+          callback(err);
+        }
+      },
+      all(sql, params, callback) {
+        try {
+          const rows = database.prepare(sql).all(...asArray(params));
+          callback(null, rows);
+        } catch (err) {
+          callback(err);
+        }
+      },
+    };
+  }
+};
 
 const app = express(); // СНАЧАЛА создаем app
 
@@ -39,7 +93,7 @@ loadEnvFile(path.resolve(__dirname, '.env'));
 
 // Путь к БД
 const DB_PATH = process.env.DB_PATH || './database.db';
-const db = new sqlite3.Database(DB_PATH);
+const db = createDatabase(DB_PATH);
 
 // Создаем таблицы
 db.serialize(() => {

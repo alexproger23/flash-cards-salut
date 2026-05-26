@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router";
 import { 
   Plus, 
@@ -15,15 +15,15 @@ import {
 import { TopicIcon } from "./components/TopicIcon"; 
 import { topics as builtInTopics } from "../data/flashcards";
 import { fetchUserData, deleteCustomTopic, hideDefaultTopic, type CustomTopic } from "../data/customTopics";
-import { useVoiceAssistant } from "../voice/VoiceAssistantProvider";
+import { useVoiceActionHandler, useVoiceAssistant } from "../voice/VoiceAssistantProvider";
 import { useAuth } from "../context/AuthContext";
-import { isCustomVoiceTopic } from "../voice/flashcardVoice";
+import { actionMatches, findTopicFromAction, isCustomVoiceTopic } from "../voice/flashcardVoice";
 import { toast } from "sonner";
 
 export function Home() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
-  const { setAssistantState } = useVoiceAssistant();
+  const { setAssistantState, speak } = useVoiceAssistant();
   
   const [customTopics, setCustomTopics] = useState<CustomTopic[]>([]);
   const [visibleBuiltInTopics, setVisibleBuiltInTopics] = useState(builtInTopics);
@@ -52,19 +52,26 @@ export function Home() {
 
   useEffect(() => {
     const allTopicsForVoice = [...customTopics, ...visibleBuiltInTopics];
+    const topicItems = allTopicsForVoice.map((t, index) => ({
+      number: index + 1,
+      id: t.id,
+      title: t.title,
+      cardsCount: t.cards.length,
+      custom: isCustomVoiceTopic(t),
+    }));
+
     setAssistantState({
       screen: "home",
-      topics: allTopicsForVoice.map((t, index) => ({
-        number: index + 1,
-        id: t.id,
-        title: t.title,
-        cardsCount: t.cards.length,
-        custom: isCustomVoiceTopic(t),
-      })),
+      topics: topicItems,
+      item_selector: {
+        type: "topics",
+        items: topicItems,
+      },
+      pendingDelete: deleteConfirm,
     });
-  }, [customTopics, visibleBuiltInTopics, setAssistantState]);
+  }, [customTopics, deleteConfirm, visibleBuiltInTopics, setAssistantState]);
 
-  const confirmDelete = async () => {
+  const confirmDelete = useCallback(async () => {
     if (!deleteConfirm) return;
 
     try {
@@ -83,7 +90,87 @@ export function Home() {
     } finally {
       setDeleteConfirm(null);
     }
-  };
+  }, [deleteConfirm]);
+
+  useVoiceActionHandler(
+    (action) => {
+      const allTopics = [...customTopics, ...visibleBuiltInTopics];
+
+      if (deleteConfirm && actionMatches(action, ["confirm", "confirm_delete"])) {
+        void confirmDelete();
+        return true;
+      }
+
+      if (deleteConfirm && actionMatches(action, ["cancel", "cancel_delete"])) {
+        setDeleteConfirm(null);
+        speak("Отменила.", "delete_cancelled");
+        return true;
+      }
+
+      if (actionMatches(action, ["open_topic", "start_topic", "start_study"])) {
+        void (async () => {
+          const topic = await findTopicFromAction(action, allTopics);
+          if (!topic) {
+            speak("Не нашла такую тему.", "topic_not_found");
+            return;
+          }
+
+          const shouldStudy = actionMatches(action, ["start_topic", "start_study"]);
+          navigate(shouldStudy || !isCustomVoiceTopic(topic) ? `/study/${topic.id}` : `/topics/${topic.id}`);
+        })();
+        return true;
+      }
+
+      if (actionMatches(action, ["start_test"])) {
+        void (async () => {
+          const topic = await findTopicFromAction(action, allTopics);
+          if (!topic) {
+            navigate("/tests");
+            return;
+          }
+          navigate("/tests", { state: { autoStartTopicId: topic.id } });
+        })();
+        return true;
+      }
+
+      if (actionMatches(action, ["edit_topic"])) {
+        void (async () => {
+          const topic = await findTopicFromAction(action, allTopics);
+          if (!topic) {
+            speak("Не нашла такую тему.", "topic_not_found");
+            return;
+          }
+          if (!isCustomVoiceTopic(topic)) {
+            speak("Стандартную тему нельзя редактировать.", "base_topic_edit_blocked");
+            return;
+          }
+          navigate(`/topics/${topic.id}`);
+        })();
+        return true;
+      }
+
+      if (actionMatches(action, ["delete_topic", "hide_topic"])) {
+        void (async () => {
+          const topic = await findTopicFromAction(action, allTopics);
+          if (!topic) {
+            speak("Не нашла такую тему.", "topic_not_found");
+            return;
+          }
+          setDeleteConfirm({
+            id: topic.id,
+            title: topic.title,
+            isCustom: isCustomVoiceTopic(topic),
+          });
+          speak(`Удалить тему ${topic.title}?`, "delete_confirm");
+        })();
+        return true;
+      }
+
+      return false;
+    },
+    [confirmDelete, customTopics, deleteConfirm, navigate, speak, visibleBuiltInTopics],
+    20
+  );
 
   return (
     <div className="min-h-screen pt-12 pb-24 px-4 bg-background text-foreground">

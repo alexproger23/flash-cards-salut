@@ -1,14 +1,23 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router";
 import { ArrowLeft, Plus, Trash2, Type, MessageSquare, Lock, Settings } from "lucide-react";
 import { fetchUserData, saveCustomTopic, type CustomTopic } from "../data/customTopics";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
+import { useVoiceActionHandler, useVoiceAssistant } from "../voice/VoiceAssistantProvider";
+import {
+  actionMatches,
+  findCardIdFromAction,
+  getActionNumber,
+  getCardBackFromAction,
+  getCardFrontFromAction,
+} from "../voice/flashcardVoice";
 
 export function TopicManager() {
   const { topicId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { setAssistantState, speak } = useVoiceAssistant();
   const isAuthenticated = !!user;
 
   const [topic, setTopic] = useState<CustomTopic | null>(null);
@@ -35,14 +44,39 @@ export function TopicManager() {
     loadTopic();
   }, [topicId, navigate]);
 
-  // Асинхронное добавление карточки
-  const handleAddCard = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!topic || !newCard.front || !newCard.back) return;
+  useEffect(() => {
+    if (!topic) return;
+
+    const cardItems = topic.cards.map((card, index) => ({
+      number: index + 1,
+      id: card.id,
+      front: card.front,
+      back: card.back,
+    }));
+
+    setAssistantState({
+      screen: "topic_manager",
+      topicId: topic.id,
+      topicTitle: topic.title,
+      cards: cardItems,
+      item_selector: {
+        type: "cards",
+        items: cardItems,
+      },
+      draftCard: newCard,
+    });
+  }, [newCard, setAssistantState, topic]);
+
+  const saveCard = useCallback(async (front: string, back: string) => {
+    if (!topic || !front.trim() || !back.trim()) return false;
+    if (!isAuthenticated) {
+      speak("Войдите, чтобы редактировать карточки.", "auth_required");
+      return false;
+    }
 
     const updatedTopic = {
       ...topic,
-      cards: [...topic.cards, { id: Date.now().toString(), front: newCard.front, back: newCard.back }]
+      cards: [...topic.cards, { id: Date.now().toString(), front: front.trim(), back: back.trim() }]
     };
 
     try {
@@ -52,15 +86,28 @@ export function TopicManager() {
       setTopic(updatedTopic);
       setNewCard({ front: "", back: "" });
       toast.success("Карточка добавлена");
+      speak("Карточка добавлена.", "card_added");
+      return true;
     } catch (error) {
       console.error("Ошибка сохранения:", error);
       toast.error("Не удалось сохранить карточку");
+      return false;
     }
+  }, [isAuthenticated, speak, topic]);
+
+  // Асинхронное добавление карточки
+  const handleAddCard = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await saveCard(newCard.front, newCard.back);
   };
 
   // Асинхронное удаление карточки
-  const deleteCard = async (id: string) => {
-    if (!topic) return;
+  const deleteCard = useCallback(async (id: string) => {
+    if (!topic || !isAuthenticated) {
+      speak("Войдите, чтобы редактировать карточки.", "auth_required");
+      return;
+    }
+
     const updatedTopic = {
       ...topic,
       cards: topic.cards.filter(c => c.id !== id)
@@ -71,11 +118,76 @@ export function TopicManager() {
       await saveCustomTopic(updatedTopic);
       setTopic(updatedTopic);
       toast.success("Карточка удалена");
+      speak("Карточка удалена.", "card_deleted");
     } catch (error) {
       console.error("Ошибка удаления:", error);
       toast.error("Не удалось удалить карточку");
     }
-  };
+  }, [isAuthenticated, speak, topic]);
+
+  useVoiceActionHandler(
+    (action) => {
+      if (!topic) return false;
+
+      if (actionMatches(action, ["edit_topic"])) {
+        navigate(`/topics/${topic.id}/edit`);
+        return true;
+      }
+
+      if (actionMatches(action, ["start_topic", "start_study", "study_again"])) {
+        navigate(`/study/${topic.id}`);
+        return true;
+      }
+
+      if (actionMatches(action, ["start_test"])) {
+        navigate("/tests", { state: { autoStartTopicId: topic.id } });
+        return true;
+      }
+
+      if (actionMatches(action, ["add_card"])) {
+        const front = getCardFrontFromAction(action);
+        const back = getCardBackFromAction(action);
+
+        if (front && back) {
+          void saveCard(front, back);
+        } else {
+          setNewCard((current) => ({
+            front: front || current.front,
+            back: back || current.back,
+          }));
+          speak("Для карточки нужны вопрос и ответ.", "card_data_missing");
+        }
+        return true;
+      }
+
+      if (actionMatches(action, ["delete_card"])) {
+        const cardId =
+          findCardIdFromAction(
+            action,
+            topic.cards.map((card, index) => ({
+              id: card.id ?? String(index + 1),
+              front: card.front,
+            }))
+          ) ??
+          (() => {
+            const number = getActionNumber(action, ["card_number", "cardNumber", "number"]);
+            return number ? topic.cards[number - 1]?.id : undefined;
+          })();
+
+        if (!cardId) {
+          speak("Не нашла такую карточку.", "card_not_found");
+          return true;
+        }
+
+        void deleteCard(String(cardId));
+        return true;
+      }
+
+      return false;
+    },
+    [deleteCard, navigate, saveCard, speak, topic],
+    20
+  );
 
   if (!topic) return null;
 
@@ -159,7 +271,7 @@ export function TopicManager() {
                 <p className="text-sm text-muted-foreground">{card.back}</p>
               </div>
               {isAuthenticated && (
-                <button onClick={() => deleteCard(card.id)} className="p-3 text-muted-foreground hover:text-destructive transition-colors">
+                <button onClick={() => card.id && deleteCard(card.id)} className="p-3 text-muted-foreground hover:text-destructive transition-colors">
                   <Trash2 size={18} />
                 </button>
               )}

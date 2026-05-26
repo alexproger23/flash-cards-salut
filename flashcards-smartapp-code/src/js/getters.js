@@ -31,6 +31,22 @@ function get_items(request) {
         return state.item_selector.items;
     }
 
+    if (state && state.topics) {
+        return state.topics;
+    }
+
+    if (state && state.cards) {
+        return state.cards;
+    }
+
+    if (state && state.options) {
+        return state.options;
+    }
+
+    if (state && state.customTopics) {
+        return state.customTopics;
+    }
+
     return null;
 }
 

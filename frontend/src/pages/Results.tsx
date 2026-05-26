@@ -84,6 +84,10 @@ export function Results() {
         navigate(`/study/${topic.id}`);
         return true;
       }
+      if (actionMatches(action, ["start_test", "repeat_test"])) {
+        navigate("/tests", { state: { autoStartTopicId: topic.id } });
+        return true;
+      }
       if (actionMatches(action, ["open_topic", "back_to_topic"]) && isCustom) {
         navigate(`/topics/${topic.id}`);
         return true;
